@@ -1,1 +1,1 @@
-# -SU-Loto.
+# SU-Loto.
