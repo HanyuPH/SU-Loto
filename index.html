@@ -20,7 +20,7 @@
         <div>
           <p class="eyebrow">Carteira Oficial</p>
           <h1>SU Loto – C2</h1>
-          <p class="subtitle">300 jogos • controle de registros e apostas</p>
+          <p class="subtitle">300 jogos • controle de apostas e conferência de concursos</p>
         </div>
       </div>
       <button class="install-btn" id="install-btn" type="button" hidden>Instalar aplicativo</button>
@@ -35,64 +35,176 @@
       <article class="metric bet"><span>Apostados</span><strong id="count-apostado">0</strong></article>
     </section>
 
-    <section class="toolbar" aria-label="Filtros e backup">
-      <div class="toolbar-top">
-        <div>
-          <h2>Controle dos jogos</h2>
-          <p id="save-status">Carregando marcações…</p>
-        </div>
-        <div class="actions">
-          <button id="export-backup" class="button primary" type="button">Exportar backup</button>
-          <label class="button" for="import-file">Importar backup</label>
-          <input id="import-file" type="file" accept="application/json,.json" hidden>
-          <button id="reset-status" class="button danger" type="button">Restaurar padrão</button>
-        </div>
-      </div>
+    <nav class="view-tabs" aria-label="Seções do aplicativo">
+      <button type="button" class="view-tab active" data-view="wallet-view" aria-selected="true">Carteira</button>
+      <button type="button" class="view-tab" data-view="contests-view" aria-selected="false">
+        Concursos e Conferência <span id="contest-tab-count" class="tab-badge">0</span>
+      </button>
+    </nav>
 
-      <div class="filters">
-        <label class="search-field">
-          <span>Buscar</span>
-          <input id="search" type="search" inputmode="numeric" placeholder="Jogo ou dezena, ex.: 42 ou 01 15 25">
-        </label>
-        <label>
-          <span>Status</span>
-          <select id="filter-status">
-            <option value="all">Todos</option>
-            <option value="pendente">Pendentes</option>
-            <option value="registrado">Registradas</option>
-            <option value="apostado">Apostados</option>
-          </select>
-        </label>
-        <label>
-          <span>Sistema</span>
-          <select id="filter-system">
-            <option value="all">Todos</option>
-            <option value="Base preservada">Base preservada</option>
-            <option value="Sistema Universal">Sistema Universal</option>
-          </select>
-        </label>
-        <label>
-          <span>Grupo</span>
-          <select id="filter-group">
-            <option value="all">Todos</option>
-            <option value="001–050">001–050</option>
-            <option value="051–100">051–100</option>
-            <option value="101–150">101–150</option>
-            <option value="151–200">151–200</option>
-            <option value="201–250">201–250</option>
-            <option value="251–300">251–300</option>
-          </select>
-        </label>
-      </div>
-      <p class="results-line"><strong id="visible-count">300</strong> jogos exibidos</p>
+    <section id="wallet-view" class="view-panel">
+      <section class="toolbar" aria-label="Filtros e backup">
+        <div class="toolbar-top">
+          <div>
+            <h2>Controle dos jogos</h2>
+            <p id="save-status">Carregando marcações…</p>
+          </div>
+          <div class="actions">
+            <button id="export-backup" class="button primary" type="button">Exportar backup</button>
+            <label class="button" for="import-file">Importar backup</label>
+            <input id="import-file" type="file" accept="application/json,.json" hidden>
+            <button id="reset-status" class="button danger" type="button">Restaurar padrão</button>
+          </div>
+        </div>
+
+        <div class="filters">
+          <label class="search-field">
+            <span>Buscar</span>
+            <input id="search" type="search" inputmode="numeric" placeholder="Jogo ou dezena, ex.: 42 ou 01 15 25">
+          </label>
+          <label>
+            <span>Status</span>
+            <select id="filter-status">
+              <option value="all">Todos</option>
+              <option value="pendente">Pendentes</option>
+              <option value="registrado">Registradas</option>
+              <option value="apostado">Apostados</option>
+            </select>
+          </label>
+          <label>
+            <span>Sistema</span>
+            <select id="filter-system">
+              <option value="all">Todos</option>
+              <option value="Base preservada">Base preservada</option>
+              <option value="Sistema Universal">Sistema Universal</option>
+            </select>
+          </label>
+          <label>
+            <span>Grupo</span>
+            <select id="filter-group">
+              <option value="all">Todos</option>
+              <option value="001–050">001–050</option>
+              <option value="051–100">051–100</option>
+              <option value="101–150">101–150</option>
+              <option value="151–200">151–200</option>
+              <option value="201–250">201–250</option>
+              <option value="251–300">251–300</option>
+            </select>
+          </label>
+        </div>
+        <p class="results-line"><strong id="visible-count">300</strong> jogos exibidos</p>
+      </section>
+
+      <section id="games" class="games" aria-live="polite"></section>
+      <div id="empty-state" class="empty" hidden>Nenhum jogo corresponde aos filtros.</div>
     </section>
 
-    <section id="games" class="games" aria-live="polite"></section>
-    <div id="empty-state" class="empty" hidden>Nenhum jogo corresponde aos filtros.</div>
+    <section id="contests-view" class="view-panel" hidden>
+      <div class="contest-layout">
+        <section class="contest-card contest-form-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow purple">Registro oficial</p>
+              <h2 id="contest-form-title">Cadastrar concurso</h2>
+              <p>Informe o resultado oficial e confira automaticamente a carteira.</p>
+            </div>
+            <button id="contest-cancel-edit" class="button" type="button" hidden>Cancelar edição</button>
+          </div>
+
+          <form id="contest-form" novalidate>
+            <input type="hidden" id="contest-editing-number">
+            <div class="contest-fields">
+              <label>
+                <span>Concurso</span>
+                <input id="contest-number" type="number" min="1" inputmode="numeric" placeholder="Ex.: 3747" required>
+              </label>
+              <label>
+                <span>Data do sorteio</span>
+                <input id="contest-date" type="date" required>
+              </label>
+              <label class="wide-field">
+                <span>Fonte oficial ou referência</span>
+                <input id="contest-source" type="url" inputmode="url" placeholder="https://...">
+              </label>
+              <label class="wide-field">
+                <span>Observação</span>
+                <textarea id="contest-notes" rows="2" placeholder="Informação opcional"></textarea>
+              </label>
+            </div>
+
+            <div class="number-entry">
+              <div class="number-entry-head">
+                <div>
+                  <h3>15 dezenas sorteadas</h3>
+                  <p>Toque nos números ou cole as dezenas no campo abaixo.</p>
+                </div>
+                <strong id="contest-selected-count" class="selection-count">0/15</strong>
+              </div>
+              <label class="pasted-numbers">
+                <span>Colar dezenas</span>
+                <input id="contest-numbers-text" type="text" inputmode="numeric" placeholder="01 02 03 04 05 06 07 08 09 10 11 12 13 14 15">
+              </label>
+              <div id="contest-number-grid" class="contest-number-grid" aria-label="Seleção das dezenas"></div>
+              <p id="contest-form-error" class="form-error" role="alert" hidden></p>
+            </div>
+
+            <div class="form-actions">
+              <button class="button primary large" type="submit">Salvar e conferir</button>
+              <button id="contest-clear-form" class="button" type="button">Limpar formulário</button>
+            </div>
+          </form>
+        </section>
+
+        <aside class="contest-card contest-tools-card">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow purple">Histórico local</p>
+              <h2>Ferramentas</h2>
+            </div>
+          </div>
+          <div class="tool-stack">
+            <label>
+              <span>Conferir</span>
+              <select id="contest-scope">
+                <option value="all">Todos os 300 jogos</option>
+                <option value="registrado">Somente registrados</option>
+                <option value="apostado">Somente apostados</option>
+              </select>
+            </label>
+            <label>
+              <span>Buscar concurso</span>
+              <input id="contest-search" type="search" inputmode="numeric" placeholder="Número do concurso">
+            </label>
+            <label class="button file-button" for="contest-csv-file">Importar concursos por CSV</label>
+            <input id="contest-csv-file" type="file" accept="text/csv,.csv" hidden>
+            <button id="contest-export-history" class="button" type="button">Exportar histórico</button>
+            <button id="contest-clear-history" class="button danger" type="button">Apagar histórico local</button>
+          </div>
+          <div class="contest-mini-summary">
+            <span>Concursos registrados</span>
+            <strong id="contest-total-count">0</strong>
+          </div>
+        </aside>
+      </div>
+
+      <section id="contest-analysis" class="contest-card contest-analysis" hidden aria-live="polite"></section>
+
+      <section class="contest-card history-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow purple">Concursos</p>
+            <h2>Histórico e conferências</h2>
+            <p>Abra um concurso para ver ou recalcular seu desempenho.</p>
+          </div>
+        </div>
+        <div id="contest-history" class="contest-history"></div>
+        <div id="contest-empty-history" class="empty compact-empty">Nenhum concurso registrado neste aparelho.</div>
+      </section>
+    </section>
   </main>
 
   <footer>
-    <p>SU Loto – C2 • Os dados ficam salvos neste dispositivo. Exporte um backup regularmente.</p>
+    <p>SU Loto – C2 • Jogos, marcações e concursos ficam salvos neste dispositivo. Exporte um backup regularmente.</p>
   </footer>
 
   <template id="game-template">
@@ -119,6 +231,7 @@
   <script src="data/games-4.js"></script>
   <script src="data/games-5.js"></script>
   <script src="data/games-6.js"></script>
+  <script src="contests.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
