@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#6f2385">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SU Loto">
+  <title>SU Loto – C2</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"><span>SU</span><strong>LOTO</strong></div>
+        <div>
+          <p class="eyebrow">Carteira Oficial</p>
+          <h1>SU Loto – C2</h1>
+          <p class="subtitle">300 jogos • controle de registros e apostas</p>
+        </div>
+      </div>
+      <button class="install-btn" id="install-btn" type="button" hidden>Instalar aplicativo</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="summary" aria-label="Resumo da carteira">
+      <article class="metric"><span>Total</span><strong id="count-total">300</strong></article>
+      <article class="metric pending"><span>Pendentes</span><strong id="count-pendente">0</strong></article>
+      <article class="metric registered"><span>Registradas</span><strong id="count-registrado">0</strong></article>
+      <article class="metric bet"><span>Apostados</span><strong id="count-apostado">0</strong></article>
+    </section>
+
+    <section class="toolbar" aria-label="Filtros e backup">
+      <div class="toolbar-top">
+        <div>
+          <h2>Controle dos jogos</h2>
+          <p id="save-status">Carregando marcações…</p>
+        </div>
+        <div class="actions">
+          <button id="export-backup" class="button primary" type="button">Exportar backup</button>
+          <label class="button" for="import-file">Importar backup</label>
+          <input id="import-file" type="file" accept="application/json,.json" hidden>
+          <button id="reset-status" class="button danger" type="button">Restaurar padrão</button>
+        </div>
+      </div>
+
+      <div class="filters">
+        <label class="search-field">
+          <span>Buscar</span>
+          <input id="search" type="search" inputmode="numeric" placeholder="Jogo ou dezena, ex.: 42 ou 01 15 25">
+        </label>
+        <label>
+          <span>Status</span>
+          <select id="filter-status">
+            <option value="all">Todos</option>
+            <option value="pendente">Pendentes</option>
+            <option value="registrado">Registradas</option>
+            <option value="apostado">Apostados</option>
+          </select>
+        </label>
+        <label>
+          <span>Sistema</span>
+          <select id="filter-system">
+            <option value="all">Todos</option>
+            <option value="Base preservada">Base preservada</option>
+            <option value="Sistema Universal">Sistema Universal</option>
+          </select>
+        </label>
+        <label>
+          <span>Grupo</span>
+          <select id="filter-group">
+            <option value="all">Todos</option>
+            <option value="001–050">001–050</option>
+            <option value="051–100">051–100</option>
+            <option value="101–150">101–150</option>
+            <option value="151–200">151–200</option>
+            <option value="201–250">201–250</option>
+            <option value="251–300">251–300</option>
+          </select>
+        </label>
+      </div>
+      <p class="results-line"><strong id="visible-count">300</strong> jogos exibidos</p>
+    </section>
+
+    <section id="games" class="games" aria-live="polite"></section>
+    <div id="empty-state" class="empty" hidden>Nenhum jogo corresponde aos filtros.</div>
+  </main>
+
+  <footer>
+    <p>SU Loto – C2 • Os dados ficam salvos neste dispositivo. Exporte um backup regularmente.</p>
+  </footer>
+
+  <template id="game-template">
+    <article class="game-card">
+      <div class="card-top">
+        <div>
+          <h3 class="game-title"></h3>
+          <p class="game-meta"></p>
+        </div>
+        <span class="status-pill"></span>
+      </div>
+      <div class="numbers"></div>
+      <div class="status-actions" role="group">
+        <button type="button" data-status="pendente">Pendente</button>
+        <button type="button" data-status="registrado">Registrada</button>
+        <button type="button" data-status="apostado">Apostado</button>
+      </div>
+    </article>
+  </template>
+
+  <script src="data/games-1.js"></script>
+  <script src="data/games-2.js"></script>
+  <script src="data/games-3.js"></script>
+  <script src="data/games-4.js"></script>
+  <script src="data/games-5.js"></script>
+  <script src="data/games-6.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
