@@ -1,0 +1,52 @@
+name: Atualizar resultado oficial da Lotofácil
+
+on:
+  schedule:
+    # Consulta a cada 30 minutos no período noturno do Brasil (UTC).
+    - cron: "17,47 21-23 * * *"
+    - cron: "17,47 0-2 * * *"
+  workflow_dispatch:
+    inputs:
+      contest_number:
+        description: "Concurso específico para adicionar ao histórico (opcional)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: atualizar-resultado-lotofacil
+  cancel-in-progress: false
+
+jobs:
+  update-result:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Consultar e validar resultado oficial
+        env:
+          CONTEST_NUMBER: ${{ inputs.contest_number }}
+        run: node scripts/update-lotofacil-result.mjs
+
+      - name: Publicar somente quando houver alteração
+        run: |
+          if git diff --quiet -- data/ultimo-concurso.json data/concursos-oficiais.json; then
+            echo "Nenhum resultado novo ou corrigido."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ultimo-concurso.json data/concursos-oficiais.json
+          git commit -m "Atualizar resultado oficial da Lotofácil"
+          git push
