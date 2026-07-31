@@ -48,7 +48,9 @@
   }
   function setStatus(id,status){
     if(!labels[status]||states[id]===status)return;
-    states[id]=status;save();refreshCard(id);updateCounters();applyFilters();toast("Jogo "+pad(id)+": "+labels[status]);
+    states[id]=status;save();refreshCard(id);updateCounters();applyFilters();
+    if(window.SULotoContests&&typeof window.SULotoContests.refresh==="function") window.SULotoContests.refresh();
+    toast("Jogo "+pad(id)+": "+labels[status]);
   }
   function refreshCard(id){
     const card=container.querySelector('[data-id="'+id+'"]');if(!card)return;
@@ -62,7 +64,7 @@
     document.getElementById("count-total").textContent=games.length;
     Object.keys(count).forEach(k=>document.getElementById("count-"+k).textContent=count[k]);
   }
-  function normalize(v){return String(v||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim()}
+  function normalize(v){return String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim()}
   function applyFilters(){
     const q=normalize(filters.search.value);const parts=q.split(/\s+/).filter(Boolean);
     let visible=0;
@@ -76,24 +78,44 @@
     visibleCount.textContent=visible;emptyState.hidden=visible!==0;
   }
   function exportBackup(){
-    const payload={app:"SU Loto",wallet:"C2",version:4,exportedAt:new Date().toISOString(),statuses:states};
+    const contests=window.SULotoContests&&typeof window.SULotoContests.exportData==="function"?window.SULotoContests.exportData():[];
+    const payload={app:"SU Loto",wallet:"C2",version:5,exportedAt:new Date().toISOString(),statuses:states,contests};
+    downloadJson(payload,"SU-Loto-C2-backup-"+new Date().toISOString().slice(0,10)+".json");toast("Backup completo exportado")
+  }
+  function downloadJson(payload,name){
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="SU-Loto-C2-backup-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Backup exportado")
+    const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)
   }
   function importBackup(file){
-    const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(reader.result);const incoming=parsed.statuses||parsed;if(!incoming||typeof incoming!=="object")throw new Error();Object.keys(incoming).forEach(id=>{if(labels[incoming[id]])states[id]=incoming[id]});save();refreshAll();toast("Backup importado com sucesso")}catch(e){alert("Este arquivo de backup não é válido.")}};reader.readAsText(file)
+    const reader=new FileReader();reader.onload=()=>{try{
+      const parsed=JSON.parse(reader.result);const incoming=parsed.statuses||parsed;
+      if(!incoming||typeof incoming!=="object")throw new Error();
+      Object.keys(incoming).forEach(id=>{if(labels[incoming[id]])states[id]=incoming[id]});
+      if(Array.isArray(parsed.contests)&&window.SULotoContests&&typeof window.SULotoContests.importData==="function") window.SULotoContests.importData(parsed.contests,true);
+      save();refreshAll();toast("Backup importado com sucesso")
+    }catch(e){alert("Este arquivo de backup não é válido.")}};reader.readAsText(file)
   }
-  function toast(message){let el=document.querySelector(".toast");if(!el){el=document.createElement("div");el.className="toast";document.body.appendChild(el)}el.textContent=message;requestAnimationFrame(()=>el.classList.add("show"));clearTimeout(el.timer);el.timer=setTimeout(()=>el.classList.remove("show"),1800)}
+  function toast(message){let el=document.querySelector(".toast");if(!el){el=document.createElement("div");el.className="toast";document.body.appendChild(el)}el.textContent=message;requestAnimationFrame(()=>el.classList.add("show"));clearTimeout(el.timer);el.timer=setTimeout(()=>el.classList.remove("show"),2100)}
+  function initViewTabs(){
+    const buttons=[...document.querySelectorAll(".view-tab")];
+    buttons.forEach(button=>button.addEventListener("click",()=>{
+      buttons.forEach(item=>{const active=item===button;item.classList.toggle("active",active);item.setAttribute("aria-selected",String(active));document.getElementById(item.dataset.view).hidden=!active});
+      window.scrollTo({top:0,behavior:"smooth"});
+    }));
+  }
 
   Object.values(filters).forEach(el=>el.addEventListener(el===filters.search?"input":"change",applyFilters));
   document.getElementById("export-backup").addEventListener("click",exportBackup);
   document.getElementById("import-file").addEventListener("change",e=>{const file=e.target.files&&e.target.files[0];if(file)importBackup(file);e.target.value=""});
-  document.getElementById("reset-status").addEventListener("click",()=>{if(confirm("Restaurar todos os jogos ao estado original da Carteira C2?")){Object.assign(states,initialStates());save();refreshAll();toast("Padrão restaurado")}});
+  document.getElementById("reset-status").addEventListener("click",()=>{if(confirm("Restaurar todos os jogos ao estado original da Carteira C2? O histórico dos concursos será preservado.")){Object.assign(states,initialStates());save();refreshAll();if(window.SULotoContests)window.SULotoContests.refresh();toast("Padrão dos jogos restaurado")}});
 
   let installPrompt=null;const installBtn=document.getElementById("install-btn");
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPrompt=e;installBtn.hidden=false});
   installBtn.addEventListener("click",async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;installBtn.hidden=true}else{alert("No iPhone, toque em Compartilhar e depois em Adicionar à Tela de Início.")}});
   if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(()=>{}));
 
-  load();render();if(!localStorage.getItem(STORAGE_KEY))save();
+  load();render();initViewTabs();
+  if(window.SULotoContests&&typeof window.SULotoContests.init==="function") window.SULotoContests.init({games,states,labels,pad,toast,formatDate,downloadJson});
+  let hasSaved=false;try{hasSaved=!!localStorage.getItem(STORAGE_KEY)}catch(e){}
+  if(!hasSaved)save();
 })();
