@@ -9,7 +9,7 @@ on:
   schedule:
     # Consulta a cada 30 minutos no período noturno do Brasil (UTC).
     - cron: "17,47 21-23 * * *"
-    - cron: "17,47 0-2 * * *"
+    - cron: "17,47 0-3 * * *"
   workflow_dispatch:
     inputs:
       contest_number:
