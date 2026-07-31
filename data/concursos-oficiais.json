@@ -43,9 +43,9 @@
       ],
       "source": "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/3749",
       "official": true,
-      "updatedAt": "2026-07-31T13:51:29.840Z",
+      "updatedAt": "2026-07-31T14:02:26.836Z",
       "accumulated": false,
-      "location": "SÃO PAULO, SP",
+      "location": "SÃO PAULO,  SP",
       "prizeTiers": [
         {
           "hits": 15,
