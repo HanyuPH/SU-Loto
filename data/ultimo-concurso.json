@@ -1,82 +1,82 @@
 {
   "schemaVersion": 1,
   "game": "LOTOFACIL",
-  "number": 3749,
-  "date": "2026-07-30",
+  "number": 3750,
+  "date": "2026-07-31",
   "numbers": [
     1,
     2,
-    3,
+    5,
+    6,
     7,
-    8,
-    9,
     11,
     12,
-    14,
-    17,
+    13,
+    15,
+    18,
     19,
-    21,
-    23,
+    20,
+    22,
     24,
     25
   ],
   "drawOrder": [
-    8,
-    24,
-    21,
-    2,
-    7,
-    1,
     19,
-    11,
-    14,
     25,
-    23,
+    2,
+    5,
+    15,
+    18,
+    13,
+    6,
+    7,
+    22,
+    24,
+    11,
     12,
-    17,
-    9,
-    3
+    1,
+    20
   ],
-  "source": "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/3749",
+  "source": "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/3750",
   "official": true,
-  "updatedAt": "2026-07-31T14:02:26.836Z",
+  "updatedAt": "2026-08-01T06:47:22.865Z",
   "accumulated": false,
-  "location": "SÃO PAULO,  SP",
+  "location": "SÃO PAULO, SP",
   "prizeTiers": [
     {
       "hits": 15,
-      "winners": 1,
-      "prize": 1290821.15,
+      "winners": 3,
+      "prize": 2417456.47,
       "description": "15 acertos"
     },
     {
       "hits": 14,
-      "winners": 334,
-      "prize": 1157.63,
+      "winners": 549,
+      "prize": 1656.55,
       "description": "14 acertos"
     },
     {
       "hits": 13,
-      "winners": 10011,
+      "winners": 17526,
       "prize": 35,
       "description": "13 acertos"
     },
     {
       "hits": 12,
-      "winners": 107424,
+      "winners": 208331,
       "prize": 14,
       "description": "12 acertos"
     },
     {
       "hits": 11,
-      "winners": 514915,
+      "winners": 1114183,
       "prize": 7,
       "description": "11 acertos"
     }
   ],
   "nextContest": {
-    "number": 3750,
-    "date": "2026-07-31",
-    "estimatedPrize": 8000000
+    "number": 3751,
+    "date": "2026-08-01",
+    "estimatedPrize": 2000000
   }
 }
