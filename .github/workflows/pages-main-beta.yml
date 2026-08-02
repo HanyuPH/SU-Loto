@@ -40,7 +40,8 @@ jobs:
           touch public/beta/.nojekyll
           test -f public/index.html
           test -f public/beta/index.html
-          test -f public/beta/contest-bets.js
+          grep -q 'const BUILD = "v4"' public/beta/beta-banner.js
+          grep -q 'Registros salvos' public/beta/contest-bets.js
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
