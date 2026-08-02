@@ -17,6 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Baixar versão estável
         uses: actions/checkout@v4
@@ -37,6 +38,9 @@ jobs:
           rsync -a --exclude='.git' --exclude='.github' beta-source/ public/beta/
           touch public/.nojekyll
           touch public/beta/.nojekyll
+          test -f public/index.html
+          test -f public/beta/index.html
+          test -f public/beta/contest-bets.js
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
@@ -51,6 +55,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: build
     steps:
       - name: Publicar no GitHub Pages
