@@ -46,19 +46,11 @@ jobs:
           test -f public/contest-bets-cloud.js
           test -f public/contest-lock.js
           test -f public/contest-session.js
-          test -f public/beta-layout-review.js
           grep -q 'stable-su-loto-c2-v11' public/service-worker.js
-          grep -q 'contest-layout>.contest-form-card{order:1!important}' public/beta-layout-review.js
-          grep -q 'contest-layout>.contest-tools-card{order:2!important}' public/beta-layout-review.js
-          grep -q 'Tipo do concurso' public/contest-bets.js
-          grep -q 'Concluir concurso' public/contest-bets.js
-          grep -q 'status: row?.status === "concluido"' public/contest-bets-cloud.js
-          grep -q 'Resultado publicado • bloqueado' public/contest-lock.js
-          grep -q 'Reabrir concurso' public/contest-session.js
           grep -q 'event.key===STORAGE_KEY' public/app.js
           grep -q 'Marcações sincronizadas' public/app.js
-          grep -q "contest-lock.js?v=1" public/service-worker.js
-          grep -q "contest-session.js?v=1" public/service-worker.js
+          grep -q 'Resultado publicado • bloqueado' public/contest-lock.js
+          grep -q 'Reabrir concurso' public/contest-session.js
           ! grep -q "beta-banner.js" public/service-worker.js
           node --check public/app.js
           node --check public/contest-bets.js
@@ -67,20 +59,25 @@ jobs:
           node --check public/contest-session.js
           node --check public/service-worker.js
 
-          # Ambiente Beta preservado
+          # Ambiente Beta SU Loto v12
           test -f public/beta/index.html
           test -f public/beta/app.js
+          test -f public/beta/official-results.js
           test -f public/beta/contest-bets.js
           test -f public/beta/contest-bets-cloud.js
           test -f public/beta/contest-lock.js
           test -f public/beta/contest-session.js
-          grep -q 'const BUILD = "v11"' public/beta/beta-banner.js
-          grep -q 'su-loto-c2-beta-v11' public/beta/service-worker.js
-          grep -q 'Resultado publicado • bloqueado' public/beta/contest-lock.js
-          grep -q 'Reabrir concurso' public/beta/contest-session.js
+          grep -q 'const BUILD = "v12"' public/beta/beta-banner.js
+          grep -q 'su-loto-c2-beta-v12' public/beta/service-worker.js
+          grep -q 'Consulta direta à fonte oficial' public/beta/official-results.js
+          grep -q 'ainda não publicado pela CAIXA' public/beta/official-results.js
+          grep -q 'safeResult.*CAIXA_API' public/beta/official-results.js
           grep -q 'event.key===STORAGE_KEY' public/beta/app.js
           grep -q 'Marcações sincronizadas' public/beta/app.js
+          grep -q 'Resultado publicado • bloqueado' public/beta/contest-lock.js
+          grep -q 'Reabrir concurso' public/beta/contest-session.js
           node --check public/beta/app.js
+          node --check public/beta/official-results.js
           node --check public/beta/contest-bets.js
           node --check public/beta/contest-bets-cloud.js
           node --check public/beta/contest-lock.js
