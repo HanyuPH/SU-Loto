@@ -2,14 +2,16 @@ name: Atualizar resultado oficial da Lotofácil
 
 on:
   push:
-    branches: [main]
+    branches: [beta]
     paths:
       - ".github/workflows/update-lotofacil-result.yml"
       - "scripts/update-lotofacil-result.mjs"
   schedule:
-    # Consulta a cada 30 minutos no período noturno do Brasil (UTC).
+    # Sorteios noturnos: consultas a cada 30 minutos.
     - cron: "17,47 21-23 * * *"
     - cron: "17,47 0-3 * * *"
+    # Sorteios de domingo às 11h: consultas durante a tarde no Brasil.
+    - cron: "7,22,37,52 14-21 * * 0"
   workflow_dispatch:
     inputs:
       contest_number:
