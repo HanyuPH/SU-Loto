@@ -43,15 +43,20 @@ jobs:
           test -f public/beta/contest-bets.js
           test -f public/beta/contest-bets-cloud.js
           test -f public/beta/contest-lock.js
-          grep -q 'const BUILD = "v9"' public/beta/beta-banner.js
-          grep -q 'su-loto-c2-beta-v9' public/beta/service-worker.js
+          test -f public/beta/contest-session.js
+          grep -q 'const BUILD = "v10"' public/beta/beta-banner.js
+          grep -q 'su-loto-c2-beta-v10' public/beta/service-worker.js
           grep -q 'contest-layout>.contest-form-card{order:1!important}' public/beta/beta-layout-review.js
           grep -q 'contest-layout>.contest-tools-card{order:2!important}' public/beta/beta-layout-review.js
           grep -q 'Tipo do concurso' public/beta/contest-bets.js
           grep -q 'Concluir concurso' public/beta/contest-bets.js
           grep -q 'status: row?.status === "concluido"' public/beta/contest-bets-cloud.js
           grep -q 'Resultado publicado • bloqueado' public/beta/contest-lock.js
+          grep -q 'Reabrir concurso' public/beta/contest-session.js
           grep -q "contest-lock.js?v=1" public/beta/service-worker.js
+          grep -q "contest-session.js?v=1" public/beta/service-worker.js
+          node --check public/beta/contest-lock.js
+          node --check public/beta/contest-session.js
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
