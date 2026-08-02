@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-beta-v7";
+const CACHE = "su-loto-c2-beta-v8";
 const ASSETS = [
   "./",
   "./index.html",
@@ -52,14 +52,14 @@ async function officialWithCloud(request) {
     response = await cache.match(request);
   }
 
-  const loader = "\n;import('./beta-banner.js?v=7')"
+  const loader = "\n;import('./beta-banner.js?v=8')"
     + ".then(()=>import('./beta-layout-review.js?v=2'))"
     + ".then(()=>import('./cloud-sync.js'))"
     + ".then(()=>import('./ecosystem-ui.js?v=5'))"
     + ".then(()=>import('./ecosystem-backup.js'))"
     + ".then(()=>import('./prize-analysis.js?v=2'))"
-    + ".then(()=>import('./contest-bets.js?v=3'))"
-    + ".then(()=>import('./contest-bets-cloud.js?v=2'))"
+    + ".then(()=>import('./contest-bets.js?v=4'))"
+    + ".then(()=>import('./contest-bets-cloud.js?v=3'))"
     + ".catch(error=>console.error('SU Loto Beta:',error));\n";
 
   if (!response) {
