@@ -59,6 +59,12 @@
     card.querySelectorAll(".status-actions button").forEach(btn=>{btn.classList.toggle("active",btn.dataset.status===status);btn.setAttribute("aria-pressed",String(btn.dataset.status===status))});
   }
   function refreshAll(){games.forEach(g=>refreshCard(g.id));updateCounters();applyFilters()}
+  function refreshFromStorage(){
+    load();
+    refreshAll();
+    if(window.SULotoContests&&typeof window.SULotoContests.refresh==="function") window.SULotoContests.refresh();
+    toast("Marcações sincronizadas");
+  }
   function updateCounters(){
     const count={pendente:0,registrado:0,apostado:0};games.forEach(g=>count[states[g.id]]++);
     document.getElementById("count-total").textContent=games.length;
@@ -108,6 +114,7 @@
   document.getElementById("export-backup").addEventListener("click",exportBackup);
   document.getElementById("import-file").addEventListener("change",e=>{const file=e.target.files&&e.target.files[0];if(file)importBackup(file);e.target.value=""});
   document.getElementById("reset-status").addEventListener("click",()=>{if(confirm("Restaurar todos os jogos ao estado original da Carteira C2? O histórico dos concursos será preservado.")){Object.assign(states,initialStates());save();refreshAll();if(window.SULotoContests)window.SULotoContests.refresh();toast("Padrão dos jogos restaurado")}});
+  window.addEventListener("storage",event=>{if(event.key===STORAGE_KEY)refreshFromStorage()});
 
   let installPrompt=null;const installBtn=document.getElementById("install-btn");
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPrompt=e;installBtn.hidden=false});
