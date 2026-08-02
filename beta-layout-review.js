@@ -30,6 +30,10 @@
     .status-actions{margin-top:auto}
     .status-actions button{min-width:0;min-height:44px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.15}
 
+    /* Ordem padronizada com o SU Mega em telas grandes, iPad e iPhone. */
+    .contest-layout>.contest-form-card{order:1!important}
+    .contest-layout>.contest-tools-card{order:2!important}
+
     .contest-bets-box{width:100%;box-sizing:border-box}
     .contest-bets-box label{min-width:0}
     .contest-bets-box input{width:100%;min-width:0;min-height:var(--su-control-height)}
