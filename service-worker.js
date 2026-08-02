@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-beta-v6";
+const CACHE = "su-loto-c2-beta-v7";
 const ASSETS = [
   "./",
   "./index.html",
@@ -52,8 +52,8 @@ async function officialWithCloud(request) {
     response = await cache.match(request);
   }
 
-  const loader = "\n;import('./beta-banner.js?v=6')"
-    + ".then(()=>import('./beta-layout-review.js?v=1'))"
+  const loader = "\n;import('./beta-banner.js?v=7')"
+    + ".then(()=>import('./beta-layout-review.js?v=2'))"
     + ".then(()=>import('./cloud-sync.js'))"
     + ".then(()=>import('./ecosystem-ui.js?v=5'))"
     + ".then(()=>import('./ecosystem-backup.js'))"
