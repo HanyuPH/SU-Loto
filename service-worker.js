@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-beta-v4";
+const CACHE = "su-loto-c2-beta-v5";
 const ASSETS = [
   "./",
   "./index.html",
@@ -20,6 +20,7 @@ const ASSETS = [
   "./ecosystem-backup.js",
   "./prize-analysis.js",
   "./contest-bets.js",
+  "./contest-bets-cloud.js",
   "./beta-banner.js",
   "./beta-layout-review.js",
   "./app.js",
@@ -51,13 +52,14 @@ async function officialWithCloud(request) {
     response = await cache.match(request);
   }
 
-  const loader = "\n;import('./beta-banner.js?v=4')"
+  const loader = "\n;import('./beta-banner.js?v=5')"
     + ".then(()=>import('./beta-layout-review.js?v=1'))"
     + ".then(()=>import('./cloud-sync.js'))"
     + ".then(()=>import('./ecosystem-ui.js?v=5'))"
     + ".then(()=>import('./ecosystem-backup.js'))"
     + ".then(()=>import('./prize-analysis.js?v=2'))"
     + ".then(()=>import('./contest-bets.js?v=3'))"
+    + ".then(()=>import('./contest-bets-cloud.js?v=1'))"
     + ".catch(error=>console.error('SU Loto Beta:',error));\n";
 
   if (!response) {
@@ -91,6 +93,7 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith("/ecosystem-ui.js") ||
     url.pathname.endsWith("/prize-analysis.js") ||
     url.pathname.endsWith("/contest-bets.js") ||
+    url.pathname.endsWith("/contest-bets-cloud.js") ||
     url.pathname.endsWith("/beta-banner.js") ||
     url.pathname.endsWith("/beta-layout-review.js") ||
     url.pathname.endsWith("/cloud-sync.js") ||
