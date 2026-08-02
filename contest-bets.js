@@ -8,6 +8,7 @@
   const STATUS_KEY = "su-loto-c2-status-v4";
   const games = Array.isArray(globalThis.SU_LOTO_GAMES) ? globalThis.SU_LOTO_GAMES : [];
   const gameById = new Map(games.map(game => [String(game.id), game]));
+  const validGameIds = new Set(games.map(game => String(game.id)));
   let toastTimer = null;
 
   function parse(raw, fallback) {
@@ -75,7 +76,7 @@
       window.dispatchEvent(new StorageEvent("storage", { key: STATUS_KEY, newValue: value }));
       return true;
     } catch (error) {
-      console.error("SU Loto encerramento de concurso:", error);
+      console.error("SU Loto alteração de concurso:", error);
       return false;
     }
   }
@@ -141,7 +142,7 @@
       .contest-bets-box input,.contest-bets-box select{width:100%;box-sizing:border-box;font:inherit;padding:11px;border:1px solid #dfd2e5;border-radius:10px;background:#fff}
       .contest-bets-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:stretch}
       .contest-bets-actions .button{min-height:46px;display:flex;align-items:center;justify-content:center;text-align:center}
-      .contest-bets-actions .save-current{grid-column:1/-1}
+      .contest-bets-actions .save-current,.contest-bets-actions .danger{grid-column:1/-1}
       .contest-bets-summary{margin-top:12px;padding:12px;border-radius:12px;background:#fff;border:1px solid #eadff0;line-height:1.5}
       .contest-bets-status{display:inline-block;margin-left:6px;padding:3px 7px;border-radius:999px;font-size:.75rem;font-weight:900;background:#e5f5eb;color:#12643f}
       .contest-bets-status.concluded{background:#eef0ef;color:#6b6470}
@@ -150,7 +151,7 @@
       .contest-bets-history-list button strong,.contest-bets-history-list button span{display:block}.contest-bets-history-list button span{margin-top:3px;color:#6b6470;font-size:.86rem}
       .contest-bets-history-list button[data-status="concluido"]{background:#f7f8f7}
       .contest-bets-empty{padding:10px 0;color:#6b6470}
-      @media(max-width:560px){.contest-bets-actions{grid-template-columns:1fr}.contest-bets-actions .save-current{grid-column:auto}}
+      @media(max-width:560px){.contest-bets-actions{grid-template-columns:1fr}.contest-bets-actions .save-current,.contest-bets-actions .danger{grid-column:auto}}
     `;
     document.head.appendChild(style);
   }
@@ -172,9 +173,10 @@
       <label><span>Valor por aposta</span><input id="su-loto-bet-price" type="number" min="0" step="0.01" value="${localStorage.getItem(PRICE_KEY) || "3.50"}"></label>
       <label><span>Ao concluir, devolver os jogos para</span><select id="su-loto-bet-release"><option value="pendente">Pendente</option><option value="registrado">Registrado</option></select></label>
       <div class="contest-bets-actions">
-        <button id="su-save-contest-bets" class="button primary save-current" type="button">Registrar apostas atuais</button>
-        <button id="su-close-contest-bets" class="button" type="button">Concluir concurso</button>
-        <button id="su-delete-contest-bets" class="button danger" type="button">Excluir registro</button>
+        <button id="su-loto-save-contest-bets" class="button primary save-current" type="button">Registrar apostas atuais</button>
+        <button id="su-loto-close-contest-bets" class="button" type="button">Concluir concurso</button>
+        <button id="su-loto-reopen-contest-bets" class="button" type="button" hidden>Reabrir concurso</button>
+        <button id="su-loto-delete-contest-bets" class="button danger" type="button">Excluir registro</button>
       </div>
       <div id="su-loto-bet-summary" class="contest-bets-summary">Nenhum concurso selecionado.</div>
       <div class="contest-bets-history">
@@ -190,7 +192,9 @@
     const specialName = document.getElementById("su-loto-bet-special-name");
     const price = document.getElementById("su-loto-bet-price");
     const release = document.getElementById("su-loto-bet-release");
-    const closeButton = document.getElementById("su-close-contest-bets");
+    const saveButton = document.getElementById("su-loto-save-contest-bets");
+    const closeButton = document.getElementById("su-loto-close-contest-bets");
+    const reopenButton = document.getElementById("su-loto-reopen-contest-bets");
     const summary = document.getElementById("su-loto-bet-summary");
     const history = document.getElementById("su-loto-bet-history");
 
@@ -199,12 +203,23 @@
       if (specialLabel.hidden) specialName.value = "";
     }
 
+    function setActionState(row) {
+      const hasRow = Boolean(row);
+      const concluded = row?.status === "concluido";
+      saveButton.disabled = concluded;
+      saveButton.textContent = !hasRow ? "Registrar apostas atuais" : concluded ? "Concurso concluído" : "Atualizar apostas do concurso";
+      closeButton.hidden = concluded;
+      closeButton.disabled = !hasRow || concluded;
+      reopenButton.hidden = !concluded;
+      reopenButton.disabled = !concluded;
+    }
+
     function renderCurrent() {
       const contest = String(number.value || "").trim();
       const row = load()[contest];
+      setActionState(row);
       if (!contest) {
         summary.textContent = "Nenhum concurso selecionado. Marque os jogos como Apostado e registre o próximo concurso.";
-        closeButton.disabled = true;
         type.value = "normal";
         specialName.value = "";
         refreshSpecialField();
@@ -213,7 +228,6 @@
       localStorage.setItem(LAST_CONTEST_KEY, contest);
       if (!row) {
         summary.textContent = `Concurso ${contest}: nenhuma aposta vinculada.`;
-        closeButton.disabled = true;
         return;
       }
       type.value = row.type;
@@ -221,8 +235,6 @@
       release.value = row.releaseStatus;
       price.value = String(Number(row.unitPrice) || Number(price.value) || 3.5);
       refreshSpecialField();
-      closeButton.disabled = row.status === "concluido";
-      closeButton.textContent = row.status === "concluido" ? "Concurso concluído" : "Concluir concurso";
       summary.innerHTML = `<strong>Concurso ${contest}</strong><span class="contest-bets-status ${row.status === "concluido" ? "concluded" : ""}">${statusLabel(row)}</span><br>${contestLabel(row)} • ${row.gameIds.length} jogos • ${money(row.totalInvested)}<br><small>Registrado em ${dateTime(row.savedAt)}${row.concludedAt ? ` • concluído em ${dateTime(row.concludedAt)}` : ""}</small>`;
     }
 
@@ -255,18 +267,19 @@
       renderCurrent();
     });
 
-    document.getElementById("su-save-contest-bets").addEventListener("click", () => {
+    saveButton.addEventListener("click", () => {
       const contest = Number(number.value);
       const unitPrice = Number(price.value);
       if (!Number.isInteger(contest) || contest < 1) return alert("Informe um concurso válido.");
       if (!(unitPrice >= 0)) return alert("Informe um valor válido.");
 
+      const data = load();
+      const existing = data[String(contest)];
+      if (existing?.status === "concluido") return alert("Este concurso está concluído. Use Reabrir concurso antes de atualizar as apostas.");
+
       const gameIds = currentBetGameIds();
       if (!gameIds.length && !confirm("Nenhum jogo está marcado como Apostado. Salvar mesmo assim?")) return;
 
-      const data = load();
-      const existing = data[String(contest)];
-      if (existing?.status === "concluido" && !confirm(`O concurso ${contest} já está concluído. Reabrir e substituir a fotografia das apostas?`)) return;
       const now = new Date().toISOString();
       data[String(contest)] = {
         contest,
@@ -287,7 +300,7 @@
       localStorage.setItem(PRICE_KEY, String(unitPrice));
       localStorage.setItem(LAST_CONTEST_KEY, String(contest));
       renderAll();
-      announce("Apostas do concurso salvas");
+      announce(existing ? "Apostas do concurso atualizadas" : "Apostas do concurso salvas");
       window.dispatchEvent(new CustomEvent("su:contest-bets-updated", { detail: data[String(contest)] }));
     });
 
@@ -340,7 +353,43 @@
       setTimeout(() => location.reload(), 850);
     });
 
-    document.getElementById("su-delete-contest-bets").addEventListener("click", () => {
+    reopenButton.addEventListener("click", () => {
+      const contest = String(number.value || "").trim();
+      const data = load();
+      const row = data[contest];
+      if (!contest || !row) return alert("Selecione um concurso registrado.");
+      if (row.status !== "concluido") return;
+
+      if (!confirm(`Reabrir o concurso ${contest}? Os ${row.gameIds.length} jogos registrados voltarão ao status Apostado. Depois você poderá marcar novos jogos e atualizar o concurso.`)) return;
+
+      const statuses = currentStatuses();
+      let restored = 0;
+      for (const id of row.gameIds) {
+        const key = String(id);
+        if (!validGameIds.has(key)) continue;
+        if (statuses[key] !== "apostado") {
+          statuses[key] = "apostado";
+          restored += 1;
+        }
+      }
+      if (!persistStatuses(statuses)) return alert("Não foi possível restaurar os jogos do concurso.");
+
+      const now = new Date().toISOString();
+      data[contest] = {
+        ...row,
+        status: "ativo",
+        concludedAt: "",
+        updatedAt: now
+      };
+      if (!save(data)) return alert("Não foi possível reabrir o concurso.");
+
+      localStorage.setItem(LAST_CONTEST_KEY, contest);
+      window.dispatchEvent(new CustomEvent("su:contest-bets-updated", { detail: data[contest] }));
+      announce(`Concurso reaberto • ${restored} jogos restaurados como Apostado`);
+      setTimeout(() => location.reload(), 850);
+    });
+
+    document.getElementById("su-loto-delete-contest-bets").addEventListener("click", () => {
       const contest = String(number.value || "").trim();
       const data = load();
       if (!contest || !data[contest]) return;
