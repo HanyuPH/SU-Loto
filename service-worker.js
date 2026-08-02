@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-beta-v11";
+const CACHE = "stable-su-loto-c2-v11";
 const ASSETS = [
   "./",
   "./index.html",
@@ -23,7 +23,6 @@ const ASSETS = [
   "./contest-bets-cloud.js",
   "./contest-lock.js",
   "./contest-session.js",
-  "./beta-banner.js",
   "./beta-layout-review.js",
   "./app.js",
   "./manifest.json",
@@ -38,7 +37,12 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
-      keys.filter(key => key.startsWith("su-loto-") && key !== CACHE).map(key => caches.delete(key))
+      keys
+        .filter(key => (
+          key.startsWith("stable-su-loto-c2-") ||
+          key.startsWith("su-loto-c2-stable-")
+        ) && key !== CACHE)
+        .map(key => caches.delete(key))
     ))
   );
   self.clients.claim();
@@ -54,8 +58,7 @@ async function officialWithCloud(request) {
     response = await cache.match(request);
   }
 
-  const loader = "\n;import('./beta-banner.js?v=11')"
-    + ".then(()=>import('./beta-layout-review.js?v=2'))"
+  const loader = "\n;import('./beta-layout-review.js?v=2')"
     + ".then(()=>import('./cloud-sync.js'))"
     + ".then(()=>import('./ecosystem-ui.js?v=5'))"
     + ".then(()=>import('./ecosystem-backup.js'))"
@@ -64,7 +67,7 @@ async function officialWithCloud(request) {
     + ".then(()=>import('./contest-bets-cloud.js?v=3'))"
     + ".then(()=>import('./contest-lock.js?v=1'))"
     + ".then(()=>import('./contest-session.js?v=1'))"
-    + ".catch(error=>console.error('SU Loto Beta:',error));\n";
+    + ".catch(error=>console.error('SU Loto:',error));\n";
 
   if (!response) {
     return new Response(loader, {
@@ -101,7 +104,6 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith("/contest-bets-cloud.js") ||
     url.pathname.endsWith("/contest-lock.js") ||
     url.pathname.endsWith("/contest-session.js") ||
-    url.pathname.endsWith("/beta-banner.js") ||
     url.pathname.endsWith("/beta-layout-review.js") ||
     url.pathname.endsWith("/cloud-sync.js") ||
     url.pathname.endsWith("/ecosystem-backup.js")
