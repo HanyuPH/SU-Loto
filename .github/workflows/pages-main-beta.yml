@@ -42,12 +42,13 @@ jobs:
           test -f public/beta/index.html
           test -f public/beta/contest-bets.js
           test -f public/beta/contest-bets-cloud.js
-          grep -q 'const BUILD = "v7"' public/beta/beta-banner.js
-          grep -q 'su-loto-c2-beta-v7' public/beta/service-worker.js
+          grep -q 'const BUILD = "v8"' public/beta/beta-banner.js
+          grep -q 'su-loto-c2-beta-v8' public/beta/service-worker.js
           grep -q 'contest-layout>.contest-form-card{order:1!important}' public/beta/beta-layout-review.js
           grep -q 'contest-layout>.contest-tools-card{order:2!important}' public/beta/beta-layout-review.js
-          grep -q 'Registros salvos' public/beta/contest-bets.js
-          grep -q 'Apostas sincronizadas' public/beta/contest-bets-cloud.js
+          grep -q 'Tipo do concurso' public/beta/contest-bets.js
+          grep -q 'Concluir concurso' public/beta/contest-bets.js
+          grep -q 'status: row?.status === "concluido"' public/beta/contest-bets-cloud.js
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
