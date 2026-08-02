@@ -13,6 +13,7 @@ let stopSnapshot = null;
 let applyingCloud = false;
 let writeInFlight = false;
 let uploadTimer = null;
+let statusHideTimer = null;
 
 function parse(raw, fallback) {
   try { return JSON.parse(raw ?? ""); } catch { return fallback; }
@@ -57,7 +58,11 @@ function mergeRecords(local, remote) {
 
 function stable(value) {
   const normalized = normalizeRecords(value);
-  return JSON.stringify(Object.fromEntries(Object.keys(normalized).sort((a, b) => Number(a) - Number(b)).map(key => [key, normalized[key]])));
+  return JSON.stringify(Object.fromEntries(
+    Object.keys(normalized)
+      .sort((a, b) => Number(a) - Number(b))
+      .map(key => [key, normalized[key]])
+  ));
 }
 
 function cloudRef(uid) {
@@ -71,6 +76,7 @@ function ensureStatusElement() {
   if (!element) {
     element = document.createElement("p");
     element.id = "su-loto-bet-cloud-status";
+    element.hidden = true;
     element.style.cssText = "margin:10px 0 0;font-size:.82rem;font-weight:800;color:#6b6470";
     box.appendChild(element);
   }
@@ -80,9 +86,18 @@ function ensureStatusElement() {
 function setStatus(text, state = "idle") {
   const element = ensureStatusElement();
   if (!element) return;
+  clearTimeout(statusHideTimer);
+  element.hidden = false;
   element.textContent = text;
   element.dataset.state = state;
   element.style.color = state === "error" ? "#b42332" : state === "synced" ? "#6f2385" : "#6b6470";
+
+  if (state === "synced" || state === "local") {
+    statusHideTimer = setTimeout(() => {
+      element.hidden = true;
+      element.textContent = "";
+    }, 2200);
+  }
 }
 
 function applyRemote(records) {
@@ -110,7 +125,7 @@ async function uploadLocal() {
       updatedAt: serverTimestamp(),
       updatedAtClient: new Date().toISOString()
     }, { merge: false });
-    setStatus("Apostas por concurso sincronizadas", "synced");
+    setStatus("Apostas sincronizadas", "synced");
   } catch (error) {
     console.error("SU Loto apostas por concurso na nuvem:", error);
     setStatus("Falha ao sincronizar apostas por concurso", "error");
@@ -134,13 +149,13 @@ async function start(user) {
   const merged = mergeRecords(local, remote);
   applyRemote(merged);
   if (!snapshot.exists() || stable(merged) !== stable(remote)) await uploadLocal();
-  else setStatus("Apostas por concurso sincronizadas", "synced");
+  else setStatus("Apostas sincronizadas", "synced");
 
   stopSnapshot?.();
   stopSnapshot = onSnapshot(reference, snap => {
     if (!snap.exists() || writeInFlight) return;
     applyRemote(snap.data()?.records || {});
-    setStatus("Apostas por concurso sincronizadas", "synced");
+    setStatus("Apostas sincronizadas", "synced");
   }, error => {
     console.error("SU Loto apostas por concurso snapshot:", error);
     setStatus("Falha ao acompanhar apostas por concurso", "error");
@@ -158,7 +173,7 @@ window.addEventListener("su:contest-bets-updated", scheduleUpload);
 
 const statusTimer = setInterval(() => {
   if (ensureStatusElement()) {
-    setStatus(currentUser ? "Apostas por concurso sincronizadas" : "Salvo neste dispositivo • entre na conta para sincronizar", currentUser ? "synced" : "local");
+    setStatus(currentUser ? "Apostas sincronizadas" : "Salvo neste dispositivo • entre na conta para sincronizar", currentUser ? "synced" : "local");
     clearInterval(statusTimer);
   }
 }, 250);
