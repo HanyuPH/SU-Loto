@@ -31,35 +31,61 @@ jobs:
           ref: beta
           path: beta-source
 
-      - name: Montar site publicado
+      - name: Montar e validar site publicado
         run: |
           mkdir -p public/beta
           rsync -a --exclude='.git' --exclude='.github' stable/ public/
           rsync -a --exclude='.git' --exclude='.github' beta-source/ public/beta/
           touch public/.nojekyll
           touch public/beta/.nojekyll
+
+          # Versão estável SU Loto v11
           test -f public/index.html
+          test -f public/app.js
+          test -f public/contest-bets.js
+          test -f public/contest-bets-cloud.js
+          test -f public/contest-lock.js
+          test -f public/contest-session.js
+          test -f public/beta-layout-review.js
+          grep -q 'stable-su-loto-c2-v11' public/service-worker.js
+          grep -q 'contest-layout>.contest-form-card{order:1!important}' public/beta-layout-review.js
+          grep -q 'contest-layout>.contest-tools-card{order:2!important}' public/beta-layout-review.js
+          grep -q 'Tipo do concurso' public/contest-bets.js
+          grep -q 'Concluir concurso' public/contest-bets.js
+          grep -q 'status: row?.status === "concluido"' public/contest-bets-cloud.js
+          grep -q 'Resultado publicado • bloqueado' public/contest-lock.js
+          grep -q 'Reabrir concurso' public/contest-session.js
+          grep -q 'event.key===STORAGE_KEY' public/app.js
+          grep -q 'Marcações sincronizadas' public/app.js
+          grep -q "contest-lock.js?v=1" public/service-worker.js
+          grep -q "contest-session.js?v=1" public/service-worker.js
+          ! grep -q "beta-banner.js" public/service-worker.js
+          node --check public/app.js
+          node --check public/contest-bets.js
+          node --check public/contest-bets-cloud.js
+          node --check public/contest-lock.js
+          node --check public/contest-session.js
+          node --check public/service-worker.js
+
+          # Ambiente Beta preservado
           test -f public/beta/index.html
+          test -f public/beta/app.js
           test -f public/beta/contest-bets.js
           test -f public/beta/contest-bets-cloud.js
           test -f public/beta/contest-lock.js
           test -f public/beta/contest-session.js
           grep -q 'const BUILD = "v11"' public/beta/beta-banner.js
           grep -q 'su-loto-c2-beta-v11' public/beta/service-worker.js
-          grep -q 'contest-layout>.contest-form-card{order:1!important}' public/beta/beta-layout-review.js
-          grep -q 'contest-layout>.contest-tools-card{order:2!important}' public/beta/beta-layout-review.js
-          grep -q 'Tipo do concurso' public/beta/contest-bets.js
-          grep -q 'Concluir concurso' public/beta/contest-bets.js
-          grep -q 'status: row?.status === "concluido"' public/beta/contest-bets-cloud.js
           grep -q 'Resultado publicado • bloqueado' public/beta/contest-lock.js
           grep -q 'Reabrir concurso' public/beta/contest-session.js
           grep -q 'event.key===STORAGE_KEY' public/beta/app.js
           grep -q 'Marcações sincronizadas' public/beta/app.js
-          grep -q "contest-lock.js?v=1" public/beta/service-worker.js
-          grep -q "contest-session.js?v=1" public/beta/service-worker.js
           node --check public/beta/app.js
+          node --check public/beta/contest-bets.js
+          node --check public/beta/contest-bets-cloud.js
           node --check public/beta/contest-lock.js
           node --check public/beta/contest-session.js
+          node --check public/beta/service-worker.js
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
