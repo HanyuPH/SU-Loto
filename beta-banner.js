@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const BUILD = "v12";
+  const BUILD = "v13";
 
   function init() {
     let bar = document.getElementById("su-beta-banner");
@@ -19,4 +19,8 @@
   } else {
     init();
   }
+
+  import("./sync-bridge.js?v=1").catch(error => {
+    console.error("SU Loto ponte de sincronização:", error);
+  });
 })();
