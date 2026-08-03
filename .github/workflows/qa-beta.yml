@@ -1,0 +1,76 @@
+name: Auditoria completa da SU Loto Beta
+
+on:
+  push:
+    branches: [beta]
+    paths-ignore:
+      - "qa/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: qa-su-loto-beta
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Baixar Beta
+        uses: actions/checkout@v4
+        with:
+          ref: beta
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar Playwright e Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Validar sintaxe de todos os JavaScripts
+        run: |
+          find . -type f -name '*.js' -not -path './node_modules/*' -print0 | xargs -0 -n1 node --check
+          node --check tests/qa-smoke.mjs
+
+      - name: Iniciar aplicativo local
+        run: |
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/su-loto-qa-server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/su-loto-qa-server.log
+          exit 1
+
+      - name: Testar todas as áreas e fluxos principais
+        id: qa
+        continue-on-error: true
+        env:
+          QA_APP: loto
+          QA_VERSION: v20
+          QA_BASE_URL: http://127.0.0.1:4173/
+        run: node tests/qa-smoke.mjs
+
+      - name: Registrar relatório da auditoria
+        if: always()
+        run: |
+          test -f qa/latest-report.json
+          test -f qa/latest-report.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/latest-report.json qa/latest-report.md
+          if ! git diff --cached --quiet; then
+            git commit -m "Atualizar relatório automático de qualidade da SU Loto Beta"
+            git push origin HEAD:beta
+          fi
+
+      - name: Reprovar quando houver falhas
+        if: steps.qa.outcome == 'failure'
+        run: exit 1
