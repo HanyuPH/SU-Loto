@@ -59,16 +59,21 @@ jobs:
           node --check public/contest-session.js
           node --check public/service-worker.js
 
-          # Ambiente Beta SU Loto v12
+          # Ambiente Beta SU Loto v13
           test -f public/beta/index.html
           test -f public/beta/app.js
           test -f public/beta/official-results.js
+          test -f public/beta/sync-bridge.js
           test -f public/beta/contest-bets.js
           test -f public/beta/contest-bets-cloud.js
           test -f public/beta/contest-lock.js
           test -f public/beta/contest-session.js
-          grep -q 'const BUILD = "v12"' public/beta/beta-banner.js
-          grep -q 'su-loto-c2-beta-v12' public/beta/service-worker.js
+          grep -q 'const BUILD = "v13"' public/beta/beta-banner.js
+          grep -q 'su-loto-c2-beta-v13' public/beta/service-worker.js
+          grep -q 'sync-bridge.js?v=1' public/beta/beta-banner.js
+          grep -q 'pageshow' public/beta/sync-bridge.js
+          grep -q 'visibilitychange' public/beta/sync-bridge.js
+          grep -q 'writeBatch' public/beta/sync-bridge.js
           grep -q 'Consulta direta à fonte oficial' public/beta/official-results.js
           grep -q 'ainda não publicado pela CAIXA' public/beta/official-results.js
           grep -q 'safeResult.*CAIXA_API' public/beta/official-results.js
@@ -77,6 +82,7 @@ jobs:
           grep -q 'Resultado publicado • bloqueado' public/beta/contest-lock.js
           grep -q 'Reabrir concurso' public/beta/contest-session.js
           node --check public/beta/app.js
+          node --check public/beta/sync-bridge.js
           node --check public/beta/official-results.js
           node --check public/beta/contest-bets.js
           node --check public/beta/contest-bets-cloud.js
