@@ -77,8 +77,7 @@ async function uploadStatuses() {
       for (const [id, status] of entries.slice(index, index + 400)) {
         batch.set(doc(db, "users", currentUser.uid, "suLoto", "C2", "gameStatuses", id), {
           status,
-          updatedAt: serverTimestamp(),
-          syncBridge: true
+          updatedAt: serverTimestamp()
         }, { merge: true });
       }
       await batch.commit();
@@ -94,7 +93,7 @@ async function uploadStatuses() {
 
 function scheduleUpload() {
   clearTimeout(uploadTimer);
-  uploadTimer = setTimeout(uploadStatuses, 220);
+  uploadTimer = setTimeout(uploadStatuses, 1200);
 }
 
 async function pullStatuses() {
@@ -139,6 +138,12 @@ function monitorLocalChanges() {
 }
 
 function installResumeHooks() {
+  window.addEventListener("storage", event => {
+    if (event.key !== STATUS_KEY) return;
+    clearTimeout(uploadTimer);
+    lastSignature = signature();
+    refreshInterface();
+  });
   window.addEventListener("pageshow", pullStatuses);
   window.addEventListener("focus", pullStatuses);
   window.addEventListener("online", pullStatuses);
