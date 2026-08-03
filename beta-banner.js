@@ -1,6 +1,7 @@
 (() => {
   "use strict";
   const BUILD = "v20";
+  // Arquivo também usado como gatilho controlado da auditoria automática.
 
   function init() {
     let bar = document.getElementById("su-beta-banner");
