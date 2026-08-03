@@ -34,10 +34,14 @@ jobs:
           npm install --no-save playwright
           npx playwright install --with-deps chromium
 
+      - name: Baixar roteiro compartilhado de auditoria
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/HanyuPH/SU-Mega/beta/tests/qa-smoke.mjs" -o tests/qa-smoke-shared.mjs
+
       - name: Validar sintaxe de todos os JavaScripts
         run: |
           find . -type f -name '*.js' -not -path './node_modules/*' -print0 | xargs -0 -n1 node --check
-          node --check tests/qa-smoke.mjs
+          node --check tests/qa-smoke-shared.mjs
 
       - name: Iniciar aplicativo local
         run: |
@@ -56,7 +60,7 @@ jobs:
           QA_APP: loto
           QA_VERSION: v20
           QA_BASE_URL: http://127.0.0.1:4173/
-        run: node tests/qa-smoke.mjs
+        run: node tests/qa-smoke-shared.mjs
 
       - name: Registrar relatório da auditoria
         if: always()
