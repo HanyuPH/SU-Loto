@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const BUILD = "v21";
+  const BUILD = "v22";
   // Arquivo também usado como gatilho controlado da auditoria automática.
 
   function init() {
