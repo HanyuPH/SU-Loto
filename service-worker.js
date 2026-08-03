@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-beta-v14";
+const CACHE = "su-loto-c2-beta-v15";
 const ASSETS = [
   "./",
   "./index.html",
@@ -15,7 +15,7 @@ const ASSETS = [
   "./data/concursos-oficiais.json",
   "./contests.js",
   "./official-results.js",
-  "./cloud-sync.js",
+  "./realtime-cloud.js",
   "./ecosystem-ui.js",
   "./ecosystem-backup.js",
   "./prize-analysis.js",
@@ -54,9 +54,9 @@ async function officialWithCloud(request) {
     response = await cache.match(request);
   }
 
-  const loader = "\n;import('./beta-banner.js?v=14')"
+  const loader = "\n;import('./beta-banner.js?v=15')"
     + ".then(()=>import('./beta-layout-review.js?v=2'))"
-    + ".then(()=>import('./cloud-sync.js?v=4'))"
+    + ".then(()=>import('./realtime-cloud.js?v=1'))"
     + ".then(()=>import('./ecosystem-ui.js?v=5'))"
     + ".then(()=>import('./ecosystem-backup.js'))"
     + ".then(()=>import('./prize-analysis.js?v=2'))"
@@ -103,7 +103,7 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith("/contest-session.js") ||
     url.pathname.endsWith("/beta-banner.js") ||
     url.pathname.endsWith("/beta-layout-review.js") ||
-    url.pathname.endsWith("/cloud-sync.js") ||
+    url.pathname.endsWith("/realtime-cloud.js") ||
     url.pathname.endsWith("/ecosystem-backup.js")
   ) {
     event.respondWith(fetch(event.request, { cache: "no-store" }).catch(() => caches.match(event.request)));
@@ -111,12 +111,12 @@ self.addEventListener("fetch", event => {
   }
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "no-store" })
       .then(response => {
-        const copy=response.clone();
-        caches.open(CACHE).then(cache=>cache.put(event.request,copy));
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(event.request, copy));
         return response;
       })
-      .catch(()=>caches.match(event.request).then(cached=>cached||caches.match("./index.html")))
+      .catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
   );
 });
