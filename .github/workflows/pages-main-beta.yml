@@ -48,9 +48,10 @@ jobs:
           test -f public/beta/contest-lock.js
           test -f public/beta/contest-session.js
           test -f public/beta/contest-selection-ui.js
-          grep -q 'const BUILD = "v18"' public/beta/beta-banner.js
-          grep -q 'su-loto-c2-beta-v18' public/beta/service-worker.js
+          grep -q 'const BUILD = "v19"' public/beta/beta-banner.js
+          grep -q 'su-loto-c2-beta-v19' public/beta/service-worker.js
           grep -q "realtime-cloud.js?v=2" public/beta/service-worker.js
+          grep -q "contest-bets-cloud.js?v=4" public/beta/service-worker.js
           grep -q "contest-session.js?v=2" public/beta/service-worker.js
           grep -q "contest-selection-ui.js?v=1" public/beta/service-worker.js
           ! grep -q "cloud-sync.js" public/beta/service-worker.js
@@ -72,10 +73,16 @@ jobs:
           grep -q 'contestSessionV2' public/beta/contest-session.js
           grep -q 'su:local-statuses-changed' public/beta/contest-session.js
           grep -q 'Outros concursos ativos serão preservados' public/beta/contest-session.js
+          grep -q 'setHint' public/beta/contest-session.js
           grep -q 'save: "su-save-contest-bets"' public/beta/contest-session.js
           grep -q 'reopen: "su-reopen-contest-bets"' public/beta/contest-session.js
           ! grep -q 'activeOther' public/beta/contest-session.js
           ! grep -q 'migrateLegacySessions' public/beta/contest-session.js
+          grep -q 'TOMBSTONE_KEY' public/beta/contest-bets-cloud.js
+          grep -q 'mergeBundles' public/beta/contest-bets-cloud.js
+          grep -q 'captureDeletions' public/beta/contest-bets-cloud.js
+          grep -q 'writePromise' public/beta/contest-bets-cloud.js
+          grep -q 'tombstones:' public/beta/contest-bets-cloud.js
           grep -q 'Consulta direta à fonte oficial' public/beta/official-results.js
           grep -q 'ainda não publicado pela CAIXA' public/beta/official-results.js
           grep -q 'event.key===STORAGE_KEY' public/beta/app.js
