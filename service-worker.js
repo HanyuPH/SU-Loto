@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-beta-v12";
+const CACHE = "su-loto-c2-beta-v13";
 const ASSETS = [
   "./",
   "./index.html",
@@ -16,6 +16,7 @@ const ASSETS = [
   "./contests.js",
   "./official-results.js",
   "./cloud-sync.js",
+  "./sync-bridge.js",
   "./ecosystem-ui.js",
   "./ecosystem-backup.js",
   "./prize-analysis.js",
@@ -54,7 +55,7 @@ async function officialWithCloud(request) {
     response = await cache.match(request);
   }
 
-  const loader = "\n;import('./beta-banner.js?v=12')"
+  const loader = "\n;import('./beta-banner.js?v=13')"
     + ".then(()=>import('./beta-layout-review.js?v=2'))"
     + ".then(()=>import('./cloud-sync.js'))"
     + ".then(()=>import('./ecosystem-ui.js?v=5'))"
@@ -104,6 +105,7 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith("/beta-banner.js") ||
     url.pathname.endsWith("/beta-layout-review.js") ||
     url.pathname.endsWith("/cloud-sync.js") ||
+    url.pathname.endsWith("/sync-bridge.js") ||
     url.pathname.endsWith("/ecosystem-backup.js")
   ) {
     event.respondWith(fetch(event.request, { cache: "no-store" }).catch(() => caches.match(event.request)));
