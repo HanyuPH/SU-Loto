@@ -71,6 +71,21 @@ jobs:
               'await page.waitForSelector(".official-sync-card", { timeout: 30000 });',
               'await page.waitForSelector(".official-sync-card", { timeout: 30000, state: "attached" });'
           )
+          offline = '''    await context.setOffline(true);
+              await page.reload({ waitUntil: "domcontentloaded" });
+              await page.waitForSelector(".game-card", { timeout: 20000 });
+              await markGame(firstId, "apostado");'''
+          offline_checked = '''    await context.setOffline(true);
+              await page.reload({ waitUntil: "domcontentloaded" });
+              await page.waitForSelector(".game-card", { timeout: 20000 });
+              await page.waitForSelector(config.betsRoot, { timeout: 20000, state: "attached" });
+              await page.waitForSelector("#su-beta-banner", { timeout: 20000 });
+              await page.waitForFunction(({ key, version }) => document.documentElement.dataset[key] === version,
+                { key: config.versionDataset, version: EXPECTED_VERSION }, { timeout: 20000 });
+              await markGame(firstId, "apostado");'''
+          if offline not in text:
+              raise SystemExit("Bloco offline não encontrado")
+          text = text.replace(offline, offline_checked, 1)
           path.write_text(text)
           PY
 
@@ -117,7 +132,7 @@ jobs:
         continue-on-error: true
         env:
           QA_APP: loto
-          QA_VERSION: v20
+          QA_VERSION: v21
           QA_BASE_URL: http://127.0.0.1:4173/
         run: node tests/qa-smoke-shared.mjs
 
