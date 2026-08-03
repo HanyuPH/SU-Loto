@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-beta-v21";
+const CACHE = "su-loto-c2-beta-v22";
 const ASSETS = [
   "./",
   "./index.html",
@@ -59,18 +59,27 @@ async function officialWithCloud(request) {
     response = await cachedIgnoringVersion(request);
   }
 
-  const loader = "\n;import('./beta-banner.js?v=21')"
-    + ".then(()=>import('./beta-layout-review.js?v=2'))"
-    + ".then(()=>import('./realtime-cloud.js?v=2'))"
-    + ".then(()=>import('./ecosystem-ui.js?v=6'))"
-    + ".then(()=>import('./ecosystem-backup.js?v=2'))"
-    + ".then(()=>import('./prize-analysis.js?v=2'))"
-    + ".then(()=>import('./contest-bets.js?v=4'))"
-    + ".then(()=>import('./contest-selection-ui.js?v=2'))"
-    + ".then(()=>import('./contest-bets-cloud.js?v=4'))"
-    + ".then(()=>import('./contest-lock.js?v=1'))"
-    + ".then(()=>import('./contest-session.js?v=2'))"
-    + ".catch(error=>console.error('SU Loto Beta:',error));\n";
+  const loader = `
+;(() => {
+  const localModules = import('./beta-banner.js?v=22')
+    .then(() => import('./beta-layout-review.js?v=2'))
+    .then(() => import('./prize-analysis.js?v=2'))
+    .then(() => import('./contest-bets.js?v=4'))
+    .then(() => import('./contest-lock.js?v=1'))
+    .then(() => import('./contest-session.js?v=2'))
+    .then(() => import('./contest-selection-ui.js?v=2'))
+    .catch(error => console.error('SU Loto módulos locais:', error));
+
+  const cloudModules = import('./realtime-cloud.js?v=2')
+    .then(() => import('./ecosystem-ui.js?v=6'))
+    .then(() => import('./ecosystem-backup.js?v=2'))
+    .then(() => localModules)
+    .then(() => import('./contest-bets-cloud.js?v=4'))
+    .catch(error => console.warn('SU Loto nuvem indisponível:', error));
+
+  Promise.allSettled([localModules, cloudModules]);
+})();
+`;
 
   if (!response) {
     return new Response(loader, {
