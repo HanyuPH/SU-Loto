@@ -88,6 +88,11 @@
     if (element.getAttribute(name) !== value) element.setAttribute(name, value);
   }
 
+  function setContext(context, state, html) {
+    if (context.dataset.state !== state) context.dataset.state = state;
+    if (context.innerHTML !== html) context.innerHTML = html;
+  }
+
   function updateActionLabels(root, contest, hasSavedRow) {
     const labels = {
       "su-save-contest-bets": hasSavedRow ? "Atualizar apostas do concurso" : "Registrar apostas atuais no concurso",
@@ -131,15 +136,24 @@
     summary?.classList.toggle("is-selected", hasSavedRow);
 
     if (!contest) {
-      context.dataset.state = "empty";
-      context.innerHTML = `<span>Concurso em foco</span><strong>Nenhum concurso selecionado</strong><small>Toque em um registro salvo para definir qual concurso receberá as ações abaixo.</small>`;
+      setContext(
+        context,
+        "empty",
+        `<span>Concurso em foco</span><strong>Nenhum concurso selecionado</strong><small>Toque em um registro salvo para definir qual concurso receberá as ações abaixo.</small>`
+      );
     } else if (!row) {
-      context.dataset.state = "draft";
-      context.innerHTML = `<span>Novo registro</span><strong>Concurso ${contest}</strong><small>Registrar apostas atuais criará um novo registro para este concurso.</small>`;
+      setContext(
+        context,
+        "draft",
+        `<span>Novo registro</span><strong>Concurso ${contest}</strong><small>Registrar apostas atuais criará um novo registro para este concurso.</small>`
+      );
     } else {
       const status = row.status === "concluido" ? "Concluído" : "Ativo";
-      context.dataset.state = "selected";
-      context.innerHTML = `<span>Concurso selecionado</span><strong>Concurso ${contest} • ${status}</strong><small>Registrar, concluir, excluir ou reabrir serão aplicados especificamente a este registro.</small>`;
+      setContext(
+        context,
+        "selected",
+        `<span>Concurso selecionado</span><strong>Concurso ${contest} • ${status}</strong><small>Registrar, concluir, excluir ou reabrir serão aplicados especificamente a este registro.</small>`
+      );
     }
 
     history.querySelectorAll("button[data-contest]").forEach(button => {
