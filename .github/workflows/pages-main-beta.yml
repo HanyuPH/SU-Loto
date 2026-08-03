@@ -48,13 +48,19 @@ jobs:
           test -f public/beta/contest-lock.js
           test -f public/beta/contest-session.js
           test -f public/beta/contest-selection-ui.js
-          grep -q 'const BUILD = "v16"' public/beta/beta-banner.js
-          grep -q 'su-loto-c2-beta-v16' public/beta/service-worker.js
-          grep -q "realtime-cloud.js?v=1" public/beta/service-worker.js
+          grep -q 'const BUILD = "v17"' public/beta/beta-banner.js
+          grep -q 'su-loto-c2-beta-v17' public/beta/service-worker.js
+          grep -q "realtime-cloud.js?v=2" public/beta/service-worker.js
           grep -q "contest-selection-ui.js?v=1" public/beta/service-worker.js
           ! grep -q "cloud-sync.js" public/beta/service-worker.js
           grep -q 'persistentLocalCache' public/beta/realtime-cloud.js
           grep -q 'persistentMultipleTabManager' public/beta/realtime-cloud.js
+          grep -q 'pendingWrites' public/beta/realtime-cloud.js
+          grep -q 'inFlightWrites' public/beta/realtime-cloud.js
+          grep -q 'installLocalWriteCapture' public/beta/realtime-cloud.js
+          grep -q 'applyingRemoteMirror' public/beta/realtime-cloud.js
+          grep -q 'statusSnapshotReady' public/beta/realtime-cloud.js
+          grep -q 'schema: 4' public/beta/realtime-cloud.js
           grep -q 'onSnapshot' public/beta/realtime-cloud.js
           grep -q 'MutationObserver' public/beta/realtime-cloud.js
           grep -q 'getDocsFromServer' public/beta/realtime-cloud.js
