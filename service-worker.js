@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-beta-v20";
+const CACHE = "su-loto-c2-beta-v21";
 const ASSETS = [
   "./",
   "./index.html",
@@ -45,6 +45,10 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
+async function cachedIgnoringVersion(request) {
+  return caches.match(request, { ignoreSearch: true });
+}
+
 async function officialWithCloud(request) {
   const cache = await caches.open(CACHE);
   let response;
@@ -52,10 +56,10 @@ async function officialWithCloud(request) {
     response = await fetch(request, { cache: "no-store" });
     if (response.ok) await cache.put(request, response.clone());
   } catch {
-    response = await cache.match(request);
+    response = await cachedIgnoringVersion(request);
   }
 
-  const loader = "\n;import('./beta-banner.js?v=20')"
+  const loader = "\n;import('./beta-banner.js?v=21')"
     + ".then(()=>import('./beta-layout-review.js?v=2'))"
     + ".then(()=>import('./realtime-cloud.js?v=2'))"
     + ".then(()=>import('./ecosystem-ui.js?v=6'))"
@@ -109,7 +113,10 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith("/realtime-cloud.js") ||
     url.pathname.endsWith("/ecosystem-backup.js")
   ) {
-    event.respondWith(fetch(event.request, { cache: "no-store" }).catch(() => caches.match(event.request)));
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" })
+        .catch(() => cachedIgnoringVersion(event.request))
+    );
     return;
   }
 
@@ -120,6 +127,9 @@ self.addEventListener("fetch", event => {
         caches.open(CACHE).then(cache => cache.put(event.request, copy));
         return response;
       })
-      .catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
+      .catch(async () => {
+        const cached = await cachedIgnoringVersion(event.request);
+        return cached || caches.match("./index.html");
+      })
   );
 });
