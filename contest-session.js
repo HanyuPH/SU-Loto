@@ -125,6 +125,11 @@
     return hint;
   }
 
+  function setHint(hint, state, text) {
+    if (hint.dataset.state !== state) hint.dataset.state = state;
+    if (hint.textContent !== text) hint.textContent = text;
+  }
+
   function ensureStyles() {
     if (document.getElementById("su-contest-reopen-style-v2")) return;
     const style = document.createElement("style");
@@ -152,31 +157,27 @@
     if (!number || !row) {
       button.disabled = true;
       button.title = "Selecione um concurso salvo";
-      hint.dataset.state = "idle";
-      hint.textContent = "Selecione um concurso salvo para verificar se ele pode ser reaberto.";
+      setHint(hint, "idle", "Selecione um concurso salvo para verificar se ele pode ser reaberto.");
       return;
     }
 
     if (row.status !== "concluido") {
       button.disabled = true;
       button.title = "Este concurso já está ativo";
-      hint.dataset.state = "active";
-      hint.textContent = `Concurso ${number} já está ativo. As ações serão aplicadas a este registro.`;
+      setHint(hint, "active", `Concurso ${number} já está ativo. As ações serão aplicadas a este registro.`);
       return;
     }
 
     if (isLocked) {
       button.disabled = true;
       button.title = "Resultado oficial publicado";
-      hint.dataset.state = "blocked";
-      hint.textContent = `Concurso ${number}: o resultado oficial já foi publicado e o registro permanece bloqueado.`;
+      setHint(hint, "blocked", `Concurso ${number}: o resultado oficial já foi publicado e o registro permanece bloqueado.`);
       return;
     }
 
     button.disabled = false;
     button.title = `Reabrir o concurso ${number} e restaurar seus jogos`;
-    hint.dataset.state = "ready";
-    hint.textContent = `Concurso ${number} concluído e disponível para reabertura. Outros concursos ativos serão preservados.`;
+    setHint(hint, "ready", `Concurso ${number} concluído e disponível para reabertura. Outros concursos ativos serão preservados.`);
   }
 
   function install() {
