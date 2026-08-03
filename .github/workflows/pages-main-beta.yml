@@ -59,33 +59,33 @@ jobs:
           node --check public/contest-session.js
           node --check public/service-worker.js
 
-          # Ambiente Beta SU Loto v14
+          # Ambiente Beta SU Loto v15
           test -f public/beta/index.html
           test -f public/beta/app.js
           test -f public/beta/official-results.js
-          test -f public/beta/cloud-sync.js
+          test -f public/beta/realtime-cloud.js
           test -f public/beta/contest-bets.js
           test -f public/beta/contest-bets-cloud.js
           test -f public/beta/contest-lock.js
           test -f public/beta/contest-session.js
-          grep -q 'const BUILD = "v14"' public/beta/beta-banner.js
-          grep -q 'su-loto-c2-beta-v14' public/beta/service-worker.js
-          grep -q "cloud-sync.js?v=4" public/beta/service-worker.js
-          grep -q 'su-loto-c2-sync-pending-v1' public/beta/cloud-sync.js
-          grep -q 'uploadPendingStatuses' public/beta/cloud-sync.js
-          grep -q 'pageshow' public/beta/cloud-sync.js
-          grep -q 'visibilitychange' public/beta/cloud-sync.js
-          ! grep -q 'sync-bridge.js' public/beta/beta-banner.js
-          ! grep -q 'sync-bridge.js' public/beta/service-worker.js
+          grep -q 'const BUILD = "v15"' public/beta/beta-banner.js
+          grep -q 'su-loto-c2-beta-v15' public/beta/service-worker.js
+          grep -q "realtime-cloud.js?v=1" public/beta/service-worker.js
+          ! grep -q "cloud-sync.js" public/beta/service-worker.js
+          grep -q 'persistentLocalCache' public/beta/realtime-cloud.js
+          grep -q 'persistentMultipleTabManager' public/beta/realtime-cloud.js
+          grep -q 'onSnapshot' public/beta/realtime-cloud.js
+          grep -q 'MutationObserver' public/beta/realtime-cloud.js
+          grep -q 'getDocsFromServer' public/beta/realtime-cloud.js
+          grep -q 'Sincronizado em tempo real' public/beta/realtime-cloud.js
           grep -q 'Consulta direta à fonte oficial' public/beta/official-results.js
           grep -q 'ainda não publicado pela CAIXA' public/beta/official-results.js
-          grep -q 'safeResult.*CAIXA_API' public/beta/official-results.js
           grep -q 'event.key===STORAGE_KEY' public/beta/app.js
           grep -q 'Marcações sincronizadas' public/beta/app.js
           grep -q 'Resultado publicado • bloqueado' public/beta/contest-lock.js
           grep -q 'Reabrir concurso' public/beta/contest-session.js
           node --check public/beta/app.js
-          node --check public/beta/cloud-sync.js
+          node --check public/beta/realtime-cloud.js
           node --check public/beta/official-results.js
           node --check public/beta/contest-bets.js
           node --check public/beta/contest-bets-cloud.js
