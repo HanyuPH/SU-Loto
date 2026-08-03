@@ -48,12 +48,15 @@ jobs:
           test -f public/beta/contest-lock.js
           test -f public/beta/contest-session.js
           test -f public/beta/contest-selection-ui.js
-          grep -q 'const BUILD = "v20"' public/beta/beta-banner.js
-          grep -q 'su-loto-c2-beta-v20' public/beta/service-worker.js
+          grep -q 'const BUILD = "v21"' public/beta/beta-banner.js
+          grep -q 'su-loto-c2-beta-v21' public/beta/service-worker.js
+          grep -q "beta-banner.js?v=21" public/beta/service-worker.js
           grep -q "realtime-cloud.js?v=2" public/beta/service-worker.js
           grep -q "contest-bets-cloud.js?v=4" public/beta/service-worker.js
           grep -q "contest-session.js?v=2" public/beta/service-worker.js
           grep -q "contest-selection-ui.js?v=2" public/beta/service-worker.js
+          grep -q 'cachedIgnoringVersion' public/beta/service-worker.js
+          grep -q 'ignoreSearch: true' public/beta/service-worker.js
           ! grep -q "cloud-sync.js" public/beta/service-worker.js
           grep -q 'persistentLocalCache' public/beta/realtime-cloud.js
           grep -q 'persistentMultipleTabManager' public/beta/realtime-cloud.js
