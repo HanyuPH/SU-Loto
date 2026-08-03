@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  statuses: write
 
 concurrency:
   group: qa-su-loto-beta
@@ -62,17 +63,65 @@ jobs:
           QA_BASE_URL: http://127.0.0.1:4173/
         run: node tests/qa-smoke-shared.mjs
 
-      - name: Registrar relatório da auditoria
+      - name: Guardar relatório como artefato
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auditoria-su-loto-beta
+          path: qa/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publicar resultado no commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          test -f qa/latest-report.json
-          test -f qa/latest-report.md
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add qa/latest-report.json qa/latest-report.md
-          if ! git diff --cached --quiet; then
-            git commit -m "Atualizar relatório automático de qualidade da SU Loto Beta"
-            git push origin HEAD:beta
+          TARGET_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if test -f qa/latest-report.json; then
+            PASSED=$(jq -r '.totals.passed' qa/latest-report.json)
+            FAILED=$(jq -r '.totals.failed' qa/latest-report.json)
+            TOTAL=$(jq -r '.totals.total' qa/latest-report.json)
+            if [ "$FAILED" = "0" ]; then STATE="success"; else STATE="failure"; fi
+            DESCRIPTION="$PASSED/$TOTAL testes aprovados; $FAILED falhas"
+          else
+            STATE="error"
+            DESCRIPTION="A auditoria terminou antes de gerar o relatório"
+          fi
+
+          jq -n \
+            --arg state "$STATE" \
+            --arg context "qa/auditoria-completa" \
+            --arg description "$DESCRIPTION" \
+            --arg target_url "$TARGET_URL" \
+            '{state:$state,context:$context,description:$description,target_url:$target_url}' > /tmp/qa-status.json
+
+          curl --fail-with-body -L -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d @/tmp/qa-status.json
+
+          if test -f qa/latest-report.json; then
+            INDEX=0
+            while IFS= read -r ROW; do
+              INDEX=$((INDEX + 1))
+              NAME=$(printf '%s' "$ROW" | jq -r '.name' | cut -c1-70)
+              DETAILS=$(printf '%s' "$ROW" | jq -r '.details // "Falha sem detalhes"' | tr '\n' ' ' | cut -c1-125)
+              jq -n \
+                --arg state "failure" \
+                --arg context "qa/falha-${INDEX}" \
+                --arg description "${NAME}: ${DETAILS}" \
+                --arg target_url "$TARGET_URL" \
+                '{state:$state,context:$context,description:$description,target_url:$target_url}' > /tmp/qa-failure.json
+              curl --fail-with-body -L -X POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+                -d @/tmp/qa-failure.json
+            done < <(jq -c '.results[] | select(.status == "fail")' qa/latest-report.json)
           fi
 
       - name: Reprovar quando houver falhas
