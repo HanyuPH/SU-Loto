@@ -5,6 +5,88 @@
     {
       "schemaVersion": 1,
       "game": "LOTOFACIL",
+      "number": 3752,
+      "date": "2026-08-03",
+      "numbers": [
+        2,
+        3,
+        6,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        21,
+        24
+      ],
+      "drawOrder": [
+        16,
+        15,
+        3,
+        9,
+        21,
+        11,
+        13,
+        7,
+        12,
+        14,
+        6,
+        24,
+        10,
+        2,
+        17
+      ],
+      "source": "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/3752",
+      "official": true,
+      "updatedAt": "2026-08-04T06:40:19.646Z",
+      "accumulated": true,
+      "location": "SÃO PAULO, SP",
+      "prizeTiers": [
+        {
+          "hits": 15,
+          "winners": 0,
+          "prize": 0,
+          "description": "15 acertos"
+        },
+        {
+          "hits": 14,
+          "winners": 151,
+          "prize": 2619.52,
+          "description": "14 acertos"
+        },
+        {
+          "hits": 13,
+          "winners": 5334,
+          "prize": 35,
+          "description": "13 acertos"
+        },
+        {
+          "hits": 12,
+          "winners": 73869,
+          "prize": 14,
+          "description": "12 acertos"
+        },
+        {
+          "hits": 11,
+          "winners": 453713,
+          "prize": 7,
+          "description": "11 acertos"
+        }
+      ],
+      "nextContest": {
+        "number": 3753,
+        "date": "2026-08-04",
+        "estimatedPrize": 5000000
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "game": "LOTOFACIL",
       "number": 3751,
       "date": "2026-08-02",
       "numbers": [
