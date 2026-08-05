@@ -1,1 +1,12 @@
-placeholder
+schemaVersion=1
+appName=SU Loto
+stableVersion=v11
+stableBranch=main
+latestBetaDocumented=v22
+latestBetaCommit=5e0310d59d57c3e20a8eac1a6fe1d0c26257845d
+activeBetaBranch=none
+walletName=SU Loto - C2
+walletGames=300
+walletLogicalSha256=f0b2f643ed525d0db2591e9dfbc53758fdc980bb891fdeb61740f077633c758a
+documentedAt=2026-08-05
+status=official
