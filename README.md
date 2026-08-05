@@ -1,14 +1,43 @@
-# SU Loto – C2
+# SU Loto - C2
 
-Aplicativo web oficial derivado da carteira **SU Loto – C2**.
+Aplicativo web oficial derivado da carteira **SU Loto - C2**.
+
+## Versões documentadas
+
+- versão estável: **v11**;
+- branch estável: `main`;
+- beta mais recente documentada: **v22** (`5e0310d59d57c3e20a8eac1a6fe1d0c26257845d`);
+- arquivo de registro: `VERSION`.
+
+A inexistência de uma branch beta ativa não altera o registro histórico da beta v22. Novos desenvolvimentos deverão voltar a utilizar uma branch beta antes da promoção para `main`.
 
 ## Carteira
+
 - 300 jogos oficiais da Carteira C2;
+- IDs oficiais canônicos: **001-300**;
+- jogos 001-100: **Base preservada**;
+- jogos 101-300: **Sistema Universal**;
+- hash lógico da carteira: `f0b2f643ed525d0db2591e9dfbc53758fdc980bb891fdeb61740f077633c758a`;
 - status **Pendente**, **Registrada** e **Apostado**;
 - filtros por status, sistema, grupo, jogo e dezenas;
 - salvamento automático no navegador.
 
+A planilha oficial continua sendo a fonte dos 300 jogos. O aplicativo é uma interface operacional derivada para consulta, marcações e conferência.
+
+## Níveis oficiais de orçamento
+
+Os níveis são prefixos aninhados da ordem canônica e estão registrados em `data/niveis-oficiais.json`:
+
+- Essencial: IDs 001-050;
+- Recomendado: IDs 001-100;
+- Intermediário: IDs 001-150;
+- Ampliado: IDs 001-200;
+- Completo: IDs 001-300.
+
+Um nível maior contém integralmente todos os jogos dos níveis menores.
+
 ## Concursos e Conferência
+
 - cadastro manual do número, data e 15 dezenas;
 - conferência de todos os 300 jogos ou somente dos jogos registrados/apostados;
 - contagem automática de 11, 12, 13, 14 e 15 pontos;
@@ -16,31 +45,45 @@ Aplicativo web oficial derivado da carteira **SU Loto – C2**.
 - histórico local, edição, exclusão, CSV e backup completo.
 
 ## Resultado oficial automático
-O workflow `.github/workflows/update-lotofacil-result.yml` consulta a API oficial da CAIXA e atualiza:
 
-- `data/ultimo-concurso.json` — resultado oficial mais recente;
-- `data/concursos-oficiais.json` — histórico automático coletado pelo projeto.
+O workflow `.github/workflows/update-lotofacil-result.yml` consulta a API oficial da CAIXA e atualiza, na mesma execução:
+
+- `data/ultimo-concurso.json` - resultado oficial mais recente;
+- `data/concursos-oficiais.json` - histórico operacional coletado pelo projeto;
+- `data/concursos-oficiais.csv` - exportação CSV sincronizada com o JSON.
+
+O CSV local antigo, encerrado no concurso 3721, permanece apenas como arquivo histórico e não é fonte operacional vigente.
 
 O aplicativo verifica o arquivo mais recente ao abrir. Quando encontra um concurso ainda não registrado, mostra as dezenas oficiais e oferece **Registrar e conferir** sem preenchimento manual.
 
 A rotina automática:
+
 - executa a cada 30 minutos no período noturno;
 - valida o tipo de jogo, concurso, data e as 15 dezenas entre 01 e 25;
 - grava uma nova versão somente quando o resultado muda;
-- pode ser executada manualmente em **Actions → Atualizar resultado oficial da Lotofácil → Run workflow**;
+- gera JSON e CSV a partir da mesma coleção de resultados;
+- pode ser executada manualmente em **Actions -> Atualizar resultado oficial da Lotofácil -> Run workflow**;
 - aceita, na execução manual, um número de concurso específico para adicioná-lo ao histórico.
 
 Fonte consultada:
 `https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil`
 
 ## Privacidade e funcionamento
+
 - marcações e concursos registrados ficam no `localStorage` do navegador;
 - nenhuma aposta ou dado pessoal é enviado para servidores externos;
 - funcionamento offline por Service Worker;
 - instalação na tela inicial do iPhone;
 - exportação e importação de backup completo.
 
-## Publicação
-O GitHub Pages utiliza a branch `main` e a pasta `/(root)`.
+## Governança documental
 
-A planilha oficial continua sendo a fonte dos 300 jogos. O aplicativo é uma interface operacional derivada para consulta, marcações e conferência.
+- protocolo de validação: `docs/PVO-SUL-001.md`;
+- estado constitucional: `docs/STATUS-CONSTITUCIONAL.md`;
+- o Notion não integra a fonte oficial nem é necessário para reconstrução;
+- estudos Analytics, Coverage, Monte Carlo, validação real e auditoria são anexos técnicos de evidência, sem força normativa isolada;
+- candidatas C3, Projeto Fênix, módulos +50/+100/+200 e versões históricas permanecem experimentais ou substituídas.
+
+## Publicação
+
+O GitHub Pages utiliza a branch `main` e a pasta `/(root)`.
