@@ -16,6 +16,15 @@
 - A versão estável documentada é v11 e a beta mais recente documentada é v22.
 - O Notion não integra a fonte oficial, não é necessário para reconstrução e não exige exportação constitucional.
 
+## Metodologia, parâmetros e filtros
+
+- Não existe uma fórmula universal, um conjunto único de pesos ou limiares aplicável a toda pesquisa da SU Loto.
+- Cada estudo deverá declarar previamente suas métricas, pesos, fórmulas, períodos e critérios de aprovação no respectivo relatório técnico.
+- O limite histórico de sobreposição 12 não é regra constitucional permanente.
+- Pares/ímpares, soma, linhas, colunas, moldura/miolo, primos, Fibonacci, sequências, frequência, atraso e repetição do concurso anterior são métricas de auditoria ou pesquisa; não são filtros rígidos oficiais da C2.
+- As regras rígidas vigentes são as de integridade: 15 dezenas válidas por jogo, ausência de repetição interna, ausência de jogos duplicados, IDs únicos, hash lógico e equivalência integral das implementações.
+- Não existe lista de filtros universalmente proibidos. Um método será rejeitado ou aprovado no contexto do estudo e dos critérios predefinidos.
+
 ## Classificação dos estudos
 
 ### Anexos técnicos permanentes de evidência
@@ -45,7 +54,10 @@ Os módulos opcionais não integram a Carteira Oficial e permanecem apenas como 
 - P-SUL-004 - encerrada pela substituição do CSV local desatualizado por CSV operacional gerado pela mesma rotina do JSON.
 - P-SUL-005 - encerrada pelo arquivo VERSION e registro no README.
 - P-SUL-006 - encerrada pela exclusão formal do Notion do conjunto de fontes oficiais e obrigatórias.
-- Protocolo de validação - encerrado pelo PVO-SUL-001.
-- Classificação de estudos e módulos - encerrada neste documento.
+- P-SUL-007 - protocolo de validação encerrado pelo PVO-SUL-001.
+- P-SUL-008 - classificação de estudos e módulos encerrada neste documento.
+- P-SUL-009 - pesos, fórmulas, limiares e limite de sobreposição resolvidos como critérios específicos de cada estudo, sem regra universal presumida.
+- P-SUL-010 - filtros estatísticos resolvidos como métricas não rígidas; somente as regras de integridade são obrigatórias na C2.
+- Ausência de PDF oficial - encerrada pela emissão do MOI-SUL-001 v1.1 e do ATO-SUL-002 em PDF.
 
 Nenhuma pendência remanescente impede a elaboração da Constituição Oficial da SU Loto v1.0.
