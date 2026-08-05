@@ -7,6 +7,7 @@ const ROOT = process.cwd();
 const DATA_DIR = path.join(ROOT, "data");
 const LATEST_PATH = path.join(DATA_DIR, "ultimo-concurso.json");
 const ARCHIVE_PATH = path.join(DATA_DIR, "concursos-oficiais.json");
+const CSV_PATH = path.join(DATA_DIR, "concursos-oficiais.csv");
 const requestedContest = String(process.env.CONTEST_NUMBER || "").trim();
 
 function normalizeDate(value) {
@@ -15,6 +16,13 @@ function normalizeDate(value) {
   const match = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
   if (!match) return "";
   return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+}
+
+function formatDateBr(value) {
+  const normalized = normalizeDate(value);
+  if (!normalized) return "";
+  const [year, month, day] = normalized.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 function normalizeNumbers(values) {
@@ -79,6 +87,39 @@ function normalizeCaixaPayload(payload, fetchedAt = new Date().toISOString()) {
       ? { number: nextNumber, date: nextDate, estimatedPrize }
       : null,
   };
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  if (!/[",\n\r]/.test(text)) return text;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function buildCsv(results) {
+  const headers = [
+    "Concurso",
+    "Data",
+    ...Array.from({ length: 15 }, (_, index) => `N${String(index + 1).padStart(2, "0")}`),
+    "Fonte",
+    "Oficial",
+    "AtualizadoEm",
+  ];
+
+  const rows = [...results]
+    .sort((a, b) => Number(a.number) - Number(b.number))
+    .map((item) => {
+      const numbers = normalizeNumbers(item.numbers).map((n) => String(n).padStart(2, "0"));
+      return [
+        Number(item.number),
+        formatDateBr(item.date),
+        ...numbers,
+        item.source || `${API_BASE}/${item.number}`,
+        item.official !== false,
+        item.updatedAt || "",
+      ];
+    });
+
+  return `${[headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n")}\n`;
 }
 
 async function readJson(filePath, fallback) {
@@ -162,12 +203,21 @@ async function main() {
 
   await writeFile(ARCHIVE_PATH, `${JSON.stringify(archiveOutput, null, 2)}\n`, "utf8");
   await writeFile(LATEST_PATH, `${JSON.stringify(latestCandidate, null, 2)}\n`, "utf8");
+  await writeFile(CSV_PATH, buildCsv(results), "utf8");
 
   console.log(`Concurso ${result.number} validado: ${result.numbers.map((n) => String(n).padStart(2, "0")).join(" ")}`);
   console.log(latestShouldChange ? "Arquivo do último concurso verificado." : "Concurso histórico adicionado sem alterar o último concurso.");
+  console.log("JSON e CSV operacionais sincronizados pela mesma execução.");
 }
 
-export { normalizeCaixaPayload, normalizeDate, normalizeNumbers, normalizePrizeTiers };
+export {
+  buildCsv,
+  formatDateBr,
+  normalizeCaixaPayload,
+  normalizeDate,
+  normalizeNumbers,
+  normalizePrizeTiers,
+};
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
