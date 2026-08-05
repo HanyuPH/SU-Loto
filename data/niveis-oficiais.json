@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "project": "SU Loto",
+  "wallet": "SU Loto - C2",
+  "canonicalId": "ID oficial sequencial 001-300",
+  "walletLogicalSha256": "f0b2f643ed525d0db2591e9dfbc53758fdc980bb891fdeb61740f077633c758a",
+  "rule": "Cada nível é um prefixo aninhado da ordem canônica; níveis maiores contêm integralmente os menores.",
+  "levels": [
+    {"name": "Essencial", "games": 50, "fromId": 1, "toId": 50},
+    {"name": "Recomendado", "games": 100, "fromId": 1, "toId": 100},
+    {"name": "Intermediário", "games": 150, "fromId": 1, "toId": 150},
+    {"name": "Ampliado", "games": 200, "fromId": 1, "toId": 200},
+    {"name": "Completo", "games": 300, "fromId": 1, "toId": 300}
+  ],
+  "approvedAt": "2026-08-05",
+  "status": "official"
+}
