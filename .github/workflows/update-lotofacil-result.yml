@@ -46,12 +46,12 @@ jobs:
 
       - name: Publicar somente quando houver alteração
         run: |
-          if git diff --quiet -- data/ultimo-concurso.json data/concursos-oficiais.json; then
+          if git diff --quiet -- data/ultimo-concurso.json data/concursos-oficiais.json data/concursos-oficiais.csv; then
             echo "Nenhum resultado novo ou corrigido."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/ultimo-concurso.json data/concursos-oficiais.json
+          git add data/ultimo-concurso.json data/concursos-oficiais.json data/concursos-oficiais.csv
           git commit -m "Atualizar resultado oficial da Lotofácil"
           git push
