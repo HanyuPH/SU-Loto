@@ -1,7 +1,8 @@
 # Registro de Arquivos Oficiais e Históricos — SU Loto
 
 **Data de consolidação:** 06/08/2026  
-**Constituição aplicável:** Constituição Oficial da SU Loto v1.0  
+**Constituição aplicável:** Constituição Oficial da SU Loto v1.0.1  
+**Emenda vigente:** Emenda Constitucional Documental nº 001  
 **Carteira vigente:** SU Loto - C2
 
 Este documento classifica os arquivos analisados na consolidação do Ecossistema SU. A classificação define força normativa e uso permitido; não altera retroativamente o conteúdo dos arquivos históricos.
@@ -26,14 +27,33 @@ A expressão `v2.2`, presente internamente na planilha, identifica exclusivament
 Ela não representa:
 
 - a versão do aplicativo, que permanece **v11**;
-- a versão da Constituição, que permanece **v1.0**;
+- a versão da Constituição, que permanece **v1.0.1**;
 - uma nova carteira diferente da C2.
 
 A identificação oficial completa é:
 
-> Carteira SU Loto - C2, versão interna da planilha v2.2, aplicativo estável v11 e Constituição Oficial v1.0.
+> Carteira SU Loto - C2, versão interna da planilha v2.2, aplicativo estável v11 e Constituição Oficial v1.0.1.
 
-## 2. Arquivo histórico incompleto
+## 2. Documento preparatório histórico
+
+### SU Loto - C2_OFICIAL_FINAL_PENDENCIAS_ENCERRADAS.xlsx
+
+- classificação: **consolidação preparatória histórica**;
+- não substitui a planilha canônica `SU Loto - C2.xlsx`;
+- permanece preservado apenas para rastreabilidade da fase anterior à Emenda Constitucional Documental nº 001.
+
+## 3. Relatório técnico consolidado
+
+### RTP-SUL-001 consolidado
+
+- classificação: **Relatório Técnico Permanente de Evidência Constitucional**;
+- data de consolidação: 06/08/2026;
+- SHA-256 do PDF analisado: `99fa27b7c3cf434357aa86a5ef7867c4115dd377e8bbd580d7d70f029812a679`;
+- função: inventário documental e fundamentação da Emenda Constitucional Documental nº 001;
+- força normativa isolada: nenhuma;
+- alteração na carteira: nenhuma.
+
+## 4. Arquivo histórico incompleto
 
 ### lotofacil-download-resultados(1).csv
 
@@ -48,7 +68,7 @@ A identificação oficial completa é:
 
 Este CSV não poderá ser utilizado como fonte operacional vigente, base integral de conferência ou substituto dos arquivos oficiais atualizados pelo workflow do repositório.
 
-## 3. Documento histórico substituído
+## 5. Documento histórico substituído
 
 ### 🟣 LF 4 — Painel Mestre do Projeto Lotofácil.txt
 
@@ -59,27 +79,40 @@ Este CSV não poderá ser utilizado como fonte operacional vigente, base integra
 
 Este arquivo não possui força normativa e não deverá ser utilizado para reconstruir o estado atual do projeto.
 
-## 4. Fontes operacionais vigentes
+## 6. Fontes operacionais vigentes
 
 A reconstrução e a operação atual da SU Loto deverão utilizar:
 
-1. Constituição Oficial da SU Loto v1.0;
+1. Constituição Oficial da SU Loto v1.0.1;
 2. Constituição Oficial do Ecossistema SU vigente;
 3. planilha `SU Loto - C2.xlsx`;
 4. arquivo `VERSION`;
-5. branch `main` para produção;
-6. branch `beta` para desenvolvimento e validação;
-7. dados oficiais mantidos pelo workflow do repositório;
-8. código, testes e documentação vigente do repositório.
+5. Emenda Constitucional Documental nº 001;
+6. branch `main` para produção;
+7. branch `beta` para desenvolvimento e validação;
+8. dados oficiais mantidos pelo workflow do repositório;
+9. código, testes e documentação vigente do repositório.
 
-## 5. Regra de prevalência
+## 7. Regra de prevalência
 
-Em caso de divergência, prevalecem a Constituição vigente, a planilha C2 homologada, o arquivo `VERSION` e a documentação atual do repositório. Os arquivos históricos classificados neste registro não poderão substituir essas fontes.
+Em caso de divergência, prevalecem, observada a função própria de cada fonte:
 
-## 6. Estado final
+1. Constituição Oficial da SU Loto vigente;
+2. Constituição Oficial do Ecossistema SU;
+3. planilha homologada `SU Loto - C2.xlsx`;
+4. arquivo `VERSION`;
+5. este Registro de Arquivos Oficiais;
+6. documentação atual da branch `main`.
 
-- arquivos oficiais vigentes analisados: 1;
-- arquivos históricos incompletos: 1;
-- documentos históricos substituídos: 1;
+Os arquivos históricos classificados neste registro não poderão substituir essas fontes.
+
+## 8. Estado final
+
+- arquivo canônico vigente: 1;
+- documento preparatório histórico: 1;
+- relatório técnico consolidado: 1;
+- arquivo histórico incompleto: 1;
+- documento histórico substituído: 1;
 - pendências de classificação: nenhuma;
-- alteração na Carteira C2: nenhuma.
+- alteração na Carteira C2: nenhuma;
+- versão constitucional vigente: v1.0.1.
