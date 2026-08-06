@@ -105,6 +105,7 @@ As regras do Firestore autorizam leitura e gravação somente ao usuário autent
 
 - Constituição Oficial da SU Loto: **v1.0.1**, consolidada em 06/08/2026;
 - Emenda Constitucional Documental nº 001: `docs/EMENDA-CONSTITUCIONAL-DOCUMENTAL-001.md`;
+- encerramento administrativo: `docs/ENCERRAMENTO-ADMINISTRATIVO-v1.0.1.md`;
 - protocolo de validação: `docs/PVO-SUL-001.md`;
 - estado constitucional: `docs/STATUS-CONSTITUCIONAL.md`;
 - registro dos arquivos analisados: `docs/REGISTRO-ARQUIVOS-OFICIAIS.md`;
@@ -112,6 +113,12 @@ As regras do Firestore autorizam leitura e gravação somente ao usuário autent
 - o Notion não integra a fonte oficial nem é necessário para reconstrução;
 - estudos Analytics, Coverage, Monte Carlo, validação real e auditoria são anexos técnicos de evidência, sem força normativa isolada;
 - candidatas C3, Projeto Fênix, módulos +50/+100/+200 e versões históricas permanecem experimentais ou substituídas.
+
+## Estado do projeto
+
+O encerramento administrativo da Constituição v1.0.1 foi concluído em 06/08/2026.
+
+O projeto opera em **manutenção oficial**. Melhorias visuais e operacionais podem seguir o fluxo Beta -> testes -> validação -> main, desde que não alterem a Carteira C2 ou regras constitucionais sem emenda formal.
 
 ## Publicação
 
