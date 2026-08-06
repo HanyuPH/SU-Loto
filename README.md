@@ -9,7 +9,7 @@ Aplicativo web oficial derivado da carteira **SU Loto - C2**.
 - beta mais recente documentada: **v22** (`5e0310d59d57c3e20a8eac1a6fe1d0c26257845d`);
 - arquivo de registro: `VERSION`.
 
-A inexistência de uma branch beta ativa não altera o registro histórico da beta v22. Novos desenvolvimentos deverão voltar a utilizar uma branch beta antes da promoção para `main`.
+A inexistência de uma branch beta ativa no registro constitucional original não altera o histórico da Beta v22. Novos desenvolvimentos deverão utilizar uma branch Beta antes da promoção para `main`.
 
 ## Carteira
 
@@ -68,16 +68,36 @@ A rotina automática:
 Fonte consultada:
 `https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil`
 
-## Privacidade e funcionamento
+## Conta, privacidade e sincronização
 
-- marcações e concursos registrados ficam no `localStorage` do navegador;
-- nenhuma aposta ou dado pessoal é enviado para servidores externos;
+O aplicativo adota funcionamento **local-first**:
+
+- marcações e concursos são mantidos no `localStorage` para uso imediato e funcionamento offline;
+- o backup manual completo permanece disponível e não é substituído pela nuvem;
+- sem autenticação, os dados operacionais permanecem apenas no navegador utilizado.
+
+Quando o usuário entra com a mesma conta utilizada no Ecossistema SU:
+
+- a autenticação é processada pelo Firebase Authentication;
+- status dos jogos e concursos são sincronizados com o Cloud Firestore;
+- os dados são gravados na árvore privada `users/{uid}/suLoto/C2`;
+- o aplicativo registra identificadores e nomes de dispositivos para apoiar a sincronização;
+- listeners em tempo real atualizam os dispositivos conectados à mesma conta;
+- alterações feitas offline permanecem localmente até a reconexão.
+
+As regras do Firestore autorizam leitura e gravação somente ao usuário autenticado cujo `uid` corresponda ao caminho acessado. O aplicativo não envia a carteira oficial nem apostas para serviços publicitários. Credenciais não são armazenadas pelo código do aplicativo.
+
+## PWA e funcionamento offline
+
 - funcionamento offline por Service Worker;
 - instalação na tela inicial do iPhone;
+- interface responsiva;
+- cache local dos arquivos essenciais;
 - exportação e importação de backup completo.
 
 ## Governança documental
 
+- Constituição Oficial da SU Loto: v1.0, homologada em 06/08/2026;
 - protocolo de validação: `docs/PVO-SUL-001.md`;
 - estado constitucional: `docs/STATUS-CONSTITUCIONAL.md`;
 - o Notion não integra a fonte oficial nem é necessário para reconstrução;
