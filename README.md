@@ -4,16 +4,19 @@ Aplicativo web oficial derivado da carteira **SU Loto - C2**.
 
 ## Versões documentadas
 
-- versão estável: **v11**;
+- versão estável do aplicativo: **v11**;
 - branch estável: `main`;
 - beta mais recente documentada: **v22** (`5e0310d59d57c3e20a8eac1a6fe1d0c26257845d`);
+- branch Beta ativa: `beta`;
 - arquivo de registro: `VERSION`.
 
-A inexistência de uma branch beta ativa no registro constitucional original não altera o histórico da Beta v22. Novos desenvolvimentos deverão utilizar uma branch Beta antes da promoção para `main`.
+A expressão **v2.2** existente na planilha identifica somente a versão interna da composição e do plano da carteira. Ela não substitui a versão do aplicativo v11, a Constituição v1.0 nem a identificação da carteira C2.
 
 ## Carteira
 
 - 300 jogos oficiais da Carteira C2;
+- versão interna da planilha: **v2.2**;
+- SHA-256 físico da planilha analisada: `4e74e633bc8782aa9c3849f889d256baf698bb42f4cbb2b91b6519d532628764`;
 - IDs oficiais canônicos: **001-300**;
 - jogos 001-100: **Base preservada**;
 - jogos 101-300: **Sistema Universal**;
@@ -23,6 +26,8 @@ A inexistência de uma branch beta ativa no registro constitucional original nã
 - salvamento automático no navegador.
 
 A planilha oficial continua sendo a fonte dos 300 jogos. O aplicativo é uma interface operacional derivada para consulta, marcações e conferência.
+
+A classificação dos arquivos oficiais, históricos e substituídos está registrada em `docs/REGISTRO-ARQUIVOS-OFICIAIS.md`.
 
 ## Níveis oficiais de orçamento
 
@@ -52,7 +57,7 @@ O workflow `.github/workflows/update-lotofacil-result.yml` consulta a API oficia
 - `data/concursos-oficiais.json` - histórico operacional coletado pelo projeto;
 - `data/concursos-oficiais.csv` - exportação CSV sincronizada com o JSON.
 
-O CSV local antigo, encerrado no concurso 3721, permanece apenas como arquivo histórico e não é fonte operacional vigente.
+O CSV local antigo, encerrado no concurso 3721 e sem o concurso 3046, permanece apenas como arquivo histórico incompleto e não é fonte operacional vigente.
 
 O aplicativo verifica o arquivo mais recente ao abrir. Quando encontra um concurso ainda não registrado, mostra as dezenas oficiais e oferece **Registrar e conferir** sem preenchimento manual.
 
@@ -100,6 +105,7 @@ As regras do Firestore autorizam leitura e gravação somente ao usuário autent
 - Constituição Oficial da SU Loto: v1.0, homologada em 06/08/2026;
 - protocolo de validação: `docs/PVO-SUL-001.md`;
 - estado constitucional: `docs/STATUS-CONSTITUCIONAL.md`;
+- registro dos arquivos analisados: `docs/REGISTRO-ARQUIVOS-OFICIAIS.md`;
 - o Notion não integra a fonte oficial nem é necessário para reconstrução;
 - estudos Analytics, Coverage, Monte Carlo, validação real e auditoria são anexos técnicos de evidência, sem força normativa isolada;
 - candidatas C3, Projeto Fênix, módulos +50/+100/+200 e versões históricas permanecem experimentais ou substituídas.
