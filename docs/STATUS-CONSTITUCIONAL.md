@@ -4,7 +4,8 @@
 **Constituição vigente:** Constituição Oficial da SU Loto v1.0.1  
 **Emenda vigente:** Emenda Constitucional Documental nº 001  
 **Carteira vigente:** SU Loto - C2  
-**Situação:** homologada, consistente e em manutenção oficial
+**Situação:** homologada, consistente e em manutenção oficial  
+**Encerramento administrativo:** concluído
 
 ## Decisões consolidadas
 
@@ -75,8 +76,14 @@ Esses arquivos podem fundamentar avaliações, mas não têm força normativa is
 
 Os módulos opcionais e materiais históricos não integram a Carteira Oficial.
 
+## Encerramento administrativo
+
+O encerramento administrativo da Constituição v1.0.1 foi concluído em 06/08/2026 e está registrado em `docs/ENCERRAMENTO-ADMINISTRATIVO-v1.0.1.md`.
+
+O projeto passa a operar em modo de manutenção oficial. O Painel Mestre, a governança do Ecossistema SU e o desenvolvimento do aplicativo deverão usar a Constituição v1.0.1 como referência vigente e preservar a v1.0 como histórica.
+
 ## Pendências
 
-Não existem pendências técnicas, documentais, metodológicas ou operacionais impeditivas.
+Não existem pendências técnicas, documentais, metodológicas, operacionais ou administrativas impeditivas.
 
 A manutenção contínua de arquivos, hashes, resultados e versões constitui obrigação permanente de governança, não pendência constitucional aberta.
