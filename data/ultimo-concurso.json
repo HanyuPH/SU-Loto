@@ -1,82 +1,82 @@
 {
   "schemaVersion": 1,
   "game": "LOTOFACIL",
-  "number": 3753,
-  "date": "2026-08-04",
+  "number": 3754,
+  "date": "2026-08-05",
   "numbers": [
     1,
-    2,
+    3,
     4,
-    6,
+    5,
+    7,
     8,
-    9,
+    11,
+    12,
+    13,
     14,
-    15,
     16,
-    17,
-    19,
+    20,
     21,
-    22,
-    24,
+    23,
     25
   ],
   "drawOrder": [
-    1,
-    17,
-    25,
-    14,
-    2,
-    6,
-    22,
-    24,
-    15,
-    4,
     16,
+    12,
     21,
-    9,
-    19,
-    8
+    3,
+    13,
+    7,
+    1,
+    23,
+    8,
+    14,
+    25,
+    20,
+    4,
+    11,
+    5
   ],
-  "source": "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/3753",
+  "source": "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/3754",
   "official": true,
-  "updatedAt": "2026-08-05T06:42:28.131Z",
-  "accumulated": false,
+  "updatedAt": "2026-08-06T10:17:22.142Z",
+  "accumulated": true,
   "location": "SÃO PAULO, SP",
   "prizeTiers": [
     {
       "hits": 15,
-      "winners": 2,
-      "prize": 2484746.38,
+      "winners": 0,
+      "prize": 0,
       "description": "15 acertos"
     },
     {
       "hits": 14,
-      "winners": 456,
-      "prize": 2025.19,
+      "winners": 199,
+      "prize": 2191.19,
       "description": "14 acertos"
     },
     {
       "hits": 13,
-      "winners": 13040,
+      "winners": 8211,
       "prize": 35,
       "description": "13 acertos"
     },
     {
       "hits": 12,
-      "winners": 147523,
+      "winners": 97971,
       "prize": 14,
       "description": "12 acertos"
     },
     {
       "hits": 11,
-      "winners": 770044,
+      "winners": 523872,
       "prize": 7,
       "description": "11 acertos"
     }
   ],
   "nextContest": {
-    "number": 3754,
-    "date": "2026-08-05",
-    "estimatedPrize": 2000000
+    "number": 3755,
+    "date": "2026-08-06",
+    "estimatedPrize": 5000000
   }
 }
