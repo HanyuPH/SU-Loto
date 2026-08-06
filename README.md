@@ -10,12 +10,13 @@ Aplicativo web oficial derivado da carteira **SU Loto - C2**.
 - branch Beta ativa: `beta`;
 - arquivo de registro: `VERSION`.
 
-A expressão **v2.2** existente na planilha identifica somente a versão interna da composição e do plano da carteira. Ela não substitui a versão do aplicativo v11, a Constituição v1.0 nem a identificação da carteira C2.
+A expressão **v2.2** existente na planilha identifica somente a versão interna da composição e do plano da carteira. Ela não substitui a versão do aplicativo v11, a Constituição v1.0.1 nem a identificação da carteira C2.
 
 ## Carteira
 
 - 300 jogos oficiais da Carteira C2;
 - versão interna da planilha: **v2.2**;
+- fonte canônica vigente: `SU Loto - C2.xlsx`;
 - SHA-256 físico da planilha analisada: `4e74e633bc8782aa9c3849f889d256baf698bb42f4cbb2b91b6519d532628764`;
 - IDs oficiais canônicos: **001-300**;
 - jogos 001-100: **Base preservada**;
@@ -102,10 +103,12 @@ As regras do Firestore autorizam leitura e gravação somente ao usuário autent
 
 ## Governança documental
 
-- Constituição Oficial da SU Loto: v1.0, homologada em 06/08/2026;
+- Constituição Oficial da SU Loto: **v1.0.1**, consolidada em 06/08/2026;
+- Emenda Constitucional Documental nº 001: `docs/EMENDA-CONSTITUCIONAL-DOCUMENTAL-001.md`;
 - protocolo de validação: `docs/PVO-SUL-001.md`;
 - estado constitucional: `docs/STATUS-CONSTITUCIONAL.md`;
 - registro dos arquivos analisados: `docs/REGISTRO-ARQUIVOS-OFICIAIS.md`;
+- RTP-SUL-001 consolidado reconhecido como evidência técnica permanente, sem força normativa isolada;
 - o Notion não integra a fonte oficial nem é necessário para reconstrução;
 - estudos Analytics, Coverage, Monte Carlo, validação real e auditoria são anexos técnicos de evidência, sem força normativa isolada;
 - candidatas C3, Projeto Fênix, módulos +50/+100/+200 e versões históricas permanecem experimentais ou substituídas.
