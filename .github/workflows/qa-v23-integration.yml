@@ -1,0 +1,134 @@
+name: Validar Beta v23 RC1 integrada
+
+on:
+  push:
+    branches:
+      - release/beta-v23-rc1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-beta-v23-rc1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integrated-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Baixar candidata Beta v23
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validar Carteira Oficial C2 derivada
+        run: node scripts/validate-wallet-data.mjs
+
+      - name: Validar sintaxe dos módulos centrais
+        run: |
+          for file in bootstrap.js sync-events.js app.js contests.js official-results.js cloud-sync.js contest-bets.js contest-bets-cloud.js ecosystem-backup.js service-worker.js scripts/update-lotofacil-result.mjs; do
+            node --check "$file"
+          done
+
+      - name: Auditar arquitetura consolidada v23
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index = Path('index.html').read_text(encoding='utf-8')
+          bootstrap = Path('bootstrap.js').read_text(encoding='utf-8')
+          sync = Path('sync-events.js').read_text(encoding='utf-8')
+          cloud = Path('cloud-sync.js').read_text(encoding='utf-8')
+          bets_cloud = Path('contest-bets-cloud.js').read_text(encoding='utf-8')
+          sw = Path('service-worker.js').read_text(encoding='utf-8')
+          version = Path('VERSION').read_text(encoding='utf-8')
+
+          if index.count('<script') != 1 or 'src="bootstrap.js"' not in index:
+              raise SystemExit('index.html deixou de ser shell único da aplicação.')
+          if 'Storage.prototype.setItem' in cloud or 'Storage.prototype.setItem' in bets_cloud:
+              raise SystemExit('Interceptação global de Storage reapareceu.')
+          if 'persistentLocalCache' not in cloud or 'persistentMultipleTabManager' not in cloud:
+              raise SystemExit('Persistência/múltiplas abas do Firestore ausentes.')
+          if 'su:state-change' not in sync:
+              raise SystemExit('Barramento central de sincronização ausente.')
+          if bootstrap.find('import("./sync-events.js")') > bootstrap.find('import("./cloud-sync.js")'):
+              raise SystemExit('Barramento deve carregar antes da nuvem.')
+          if 'response.text(' in sw or 'new Response(' in sw:
+              raise SystemExit('Service Worker voltou a transformar respostas JavaScript.')
+          if 'latestBetaDocumented=v23' not in version or 'betaCandidateStatus=release-candidate' not in version:
+              raise SystemExit('VERSION não identifica corretamente a candidata v23.')
+          for legacy in [f'data/games-{i}.js' for i in range(1, 7)]:
+              if Path(legacy).exists():
+                  raise SystemExit(f'Arquivo legado ainda presente: {legacy}')
+
+          print('Arquitetura integrada v23 aprovada.')
+          PY
+
+      - name: Baixar main estável para simular Pages
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: stable-main
+
+      - name: Simular publicação estável + Beta v23
+        run: |
+          rm -rf public
+          mkdir -p public
+          rsync -a --delete --exclude='.git/' --exclude='.github/' stable-main/ public/
+          mkdir -p public/beta
+          rsync -a --delete --exclude='.git/' --exclude='.github/' ./ public/beta/ \
+            --exclude='stable-main/' --exclude='public/' --exclude='node_modules/'
+          touch public/.nojekyll
+
+          test -f public/index.html
+          test -f public/VERSION
+          test -f public/beta/index.html
+          test -f public/beta/VERSION
+          test -f public/beta/data/carteira-c2/manifest.json
+          test -f public/data/ultimo-concurso.json
+          test -f public/data/concursos-oficiais.json
+          test -f public/data/concursos-oficiais.csv
+
+          grep -q '^stableVersion=v11$' public/VERSION
+          grep -q '^latestBetaDocumented=v23$' public/beta/VERSION
+          grep -q '^betaCandidateStatus=release-candidate$' public/beta/VERSION
+
+      - name: Instalar navegador de QA
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Iniciar candidata localmente
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/su-loto-v23-server.log 2>&1 &
+          echo $! > /tmp/su-loto-v23-server.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/su-loto-v23-server.log
+          exit 1
+
+      - name: Smoke test do núcleo C2 e PWA
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+        run: timeout 90s node tests/core-separation-smoke.mjs
+
+      - name: Smoke test da sincronização e offline
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+        run: timeout 90s node tests/sync-events-smoke.mjs
+
+      - name: Encerrar servidor local
+        if: always()
+        run: |
+          if [ -f /tmp/su-loto-v23-server.pid ]; then
+            kill "$(cat /tmp/su-loto-v23-server.pid)" 2>/dev/null || true
+          fi
