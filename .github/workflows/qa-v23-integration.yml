@@ -52,6 +52,7 @@ jobs:
           bets_cloud = Path('contest-bets-cloud.js').read_text(encoding='utf-8')
           sw = Path('service-worker.js').read_text(encoding='utf-8')
           version = Path('VERSION').read_text(encoding='utf-8')
+          pages = Path('.github/workflows/pages-main-beta.yml').read_text(encoding='utf-8')
 
           if index.count('<script') != 1 or 'src="bootstrap.js"' not in index:
               raise SystemExit('index.html deixou de ser shell único da aplicação.')
@@ -71,7 +72,26 @@ jobs:
               if Path(legacy).exists():
                   raise SystemExit(f'Arquivo legado ainda presente: {legacy}')
 
-          print('Arquitetura integrada v23 aprovada.')
+          forbidden_pages = ['Beta v22', 'beta-banner.js', 'realtime-cloud.js', 'su-loto-c2-beta-v22']
+          for token in forbidden_pages:
+              if token in pages:
+                  raise SystemExit(f'Workflow Pages ainda depende da arquitetura v22: {token}')
+          required_pages = [
+              'branches: [main, beta]',
+              'latestBetaDocumented=v23',
+              'bootstrap.js',
+              'sync-events.js',
+              'persistentLocalCache',
+              'persistentMultipleTabManager',
+              'validate-wallet-data.mjs',
+              'actions/upload-pages-artifact@v4',
+              'actions/deploy-pages@v4'
+          ]
+          for token in required_pages:
+              if token not in pages:
+                  raise SystemExit(f'Workflow Pages v23 incompleto: {token}')
+
+          print('Arquitetura integrada v23 e workflow Pages aprovados.')
           PY
 
       - name: Baixar main estável para simular Pages
@@ -102,6 +122,7 @@ jobs:
           grep -q '^stableVersion=v11$' public/VERSION
           grep -q '^latestBetaDocumented=v23$' public/beta/VERSION
           grep -q '^betaCandidateStatus=release-candidate$' public/beta/VERSION
+          (cd public/beta && node scripts/validate-wallet-data.mjs)
 
       - name: Instalar navegador de QA
         run: |
