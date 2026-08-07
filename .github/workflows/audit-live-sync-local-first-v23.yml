@@ -1,0 +1,61 @@
+name: Auditar sincronização local-first publicada SU Loto v23
+
+on:
+  pull_request:
+    branches:
+      - beta
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      BASE: https://hanyuph.github.io/SU-Loto/beta
+      MERGED_AT: 2026-08-07T20:33:21Z
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Confirmar deployment posterior à correção e arquivos públicos
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/live-sync
+
+          deployment_ok=0
+          for attempt in $(seq 1 36); do
+            gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/live-sync/main-runs.json
+            jq --arg since "$MERGED_AT" '[.workflow_runs[] | select(.name == "Publicar SU Loto estável e Beta" and .created_at >= $since) | {id,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}]' /tmp/live-sync/main-runs.json > /tmp/live-sync/pages-after-fix.json
+            if jq -e 'map(select(.conclusion == "success")) | length > 0' /tmp/live-sync/pages-after-fix.json >/dev/null; then
+              deployment_ok=1
+              break
+            fi
+            sleep 5
+          done
+          test "$deployment_ok" = 1
+
+          audit="sync-${GITHUB_RUN_ID}"
+          fetch_until() {
+            local url="$1" pattern="$2" out="$3"
+            for attempt in $(seq 1 36); do
+              if curl -fsSL -H 'Cache-Control: no-cache' "${url}?audit=${audit}-${attempt}" -o "$out" && grep -Fq "$pattern" "$out"; then
+                return 0
+              fi
+              sleep 5
+            done
+            echo "Conteúdo esperado não encontrado em $url: $pattern" >&2
+            exit 1
+          }
+
+          fetch_until "$BASE/bootstrap.js" 'sync-local-first-guard.js?v=1' /tmp/live-sync/bootstrap.js
+          fetch_until "$BASE/bootstrap.js" 'cloud-sync.js?v=2' /tmp/live-sync/bootstrap-cloud.js
+          fetch_until "$BASE/sync-local-first-guard.js" 'stopImmediatePropagation' /tmp/live-sync/sync-local-first-guard.js
+          fetch_until "$BASE/sync-local-first-guard.js" 'Salvando na nuvem…' /tmp/live-sync/sync-local-first-guard-ui.js
+          fetch_until "$BASE/service-worker.js" 'su-loto-c2-v23-sync-v3' /tmp/live-sync/service-worker.js
+          fetch_until "$BASE/service-worker.js" '"./sync-local-first-guard.js"' /tmp/live-sync/service-worker-module.js
+          fetch_until "$BASE/VERSION" 'latestBetaDocumented=v23' /tmp/live-sync/VERSION
+
+          printf 'SU Loto Beta v23: sincronização local-first publicada e confirmada\n' > /tmp/live-sync/RESUMO.txt
+          cat /tmp/live-sync/RESUMO.txt
+          cat /tmp/live-sync/pages-after-fix.json
