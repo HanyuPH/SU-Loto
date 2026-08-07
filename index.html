@@ -48,7 +48,7 @@
         <div class="toolbar-top">
           <div>
             <h2>Controle dos jogos</h2>
-            <p id="save-status">Carregando marcações…</p>
+            <p id="save-status">Validando e carregando a Carteira C2…</p>
           </div>
           <div class="actions">
             <button id="export-backup" class="button primary" type="button">Exportar backup</button>
@@ -205,7 +205,7 @@
   </main>
 
   <footer>
-    <p>SU Loto – C2 • Jogos, marcações e concursos ficam salvos neste dispositivo. Exporte um backup regularmente.</p>
+    <p>SU Loto – C2 • A carteira é somente leitura; marcações e concursos são dados operacionais separados.</p>
   </footer>
 
   <template id="game-template">
@@ -226,14 +226,6 @@
     </article>
   </template>
 
-  <script src="data/games-1.js"></script>
-  <script src="data/games-2.js"></script>
-  <script src="data/games-3.js"></script>
-  <script src="data/games-4.js"></script>
-  <script src="data/games-5.js"></script>
-  <script src="data/games-6.js"></script>
-  <script src="contests.js"></script>
-  <script src="app.js"></script>
-  <script src="official-results.js"></script>
+  <script type="module" src="bootstrap.js"></script>
 </body>
 </html>
