@@ -38,16 +38,20 @@ window.addEventListener("storage", event => {
   if (domain) emit(domain, { source: "storage", detail: { newValue: event.newValue } });
 });
 
-// Status dos jogos: o app salva antes do clique terminar; a leitura pela nuvem ocorre no próximo ciclo.
+// Status dos jogos: identifica o registro alterado sem observar globalmente o Storage.
 document.addEventListener("click", event => {
-  if (event.target.closest?.(".game-card[data-id] .status-actions button[data-status]")) {
-    emit("statuses", { source: "ui", delay: 0 });
-  }
+  const button = event.target.closest?.(".game-card[data-id] .status-actions button[data-status]");
+  if (!button) return;
+  const card = button.closest(".game-card[data-id]");
+  emit("statuses", {
+    source: "ui",
+    detail: { id: card?.dataset.id || null, status: button.dataset.status || null }
+  });
 }, true);
 
 // Concursos salvos pelo formulário, exclusões e limpeza do histórico.
 document.addEventListener("submit", event => {
-  if (event.target?.id === "contest-form") emit("contests", { source: "ui", delay: 0 });
+  if (event.target?.id === "contest-form") emit("contests", { source: "ui" });
 }, true);
 
 document.addEventListener("click", event => {
@@ -55,7 +59,7 @@ document.addEventListener("click", event => {
     event.target.closest?.("#contest-clear-history") ||
     event.target.closest?.("#contest-history [data-action=\"delete\"]")
   ) {
-    emit("contests", { source: "ui", delay: 0 });
+    emit("contests", { source: "ui" });
   }
 }, true);
 
