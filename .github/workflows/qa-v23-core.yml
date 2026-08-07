@@ -1,0 +1,89 @@
+name: Validar separação central SU Loto v23
+
+on:
+  push:
+    branches:
+      - agent/su-loto-v23-core-separation
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-v23-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-separation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validar Carteira C2 derivada
+        run: node scripts/validate-wallet-data.mjs
+
+      - name: Verificar SHA-256 da planilha oficial
+        run: |
+          EXPECTED="4e74e633bc8782aa9c3849f889d256baf698bb42f4cbb2b91b6519d532628764"
+          ACTUAL="$(sha256sum 'SU Loto - C2.xlsx' | awk '{print $1}')"
+          test "$ACTUAL" = "$EXPECTED"
+
+      - name: Validar sintaxe JavaScript
+        run: |
+          for file in bootstrap.js app.js contests.js official-results.js service-worker.js cloud-sync.js ecosystem-ui.js ecosystem-backup.js prize-analysis.js contest-bets.js contest-bets-cloud.js contest-lock.js contest-session.js beta-layout-review.js; do
+            node --check "$file"
+          done
+
+      - name: Auditar separação arquitetural
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          html = Path('index.html').read_text(encoding='utf-8')
+          if html.count('<script') != 1:
+              raise SystemExit('index.html deve possuir somente um ponto de entrada JavaScript')
+          if '<script type="module" src="bootstrap.js"></script>' not in html:
+              raise SystemExit('bootstrap.js não é o ponto de entrada único do shell')
+          for legacy in [f'data/games-{n}.js' for n in range(1, 7)]:
+              if Path(legacy).exists():
+                  raise SystemExit(f'Fonte legada ainda presente: {legacy}')
+
+          sw = Path('service-worker.js').read_text(encoding='utf-8')
+          forbidden_sw = ['officialWithCloud', 'const loader =', 'response.text()) + loader']
+          for token in forbidden_sw:
+              if token in sw:
+                  raise SystemExit(f'Service Worker ainda contém injeção de módulo: {token}')
+          if './bootstrap.js' not in sw:
+              raise SystemExit('Service Worker não pré-carrega o bootstrap explícito')
+
+          manifest = json.loads(Path('data/carteira-c2/manifest.json').read_text(encoding='utf-8'))
+          if manifest.get('operationalState') != 'not-part-of-wallet':
+              raise SystemExit('Manifesto não separa estado operacional da carteira')
+          forbidden_fields = {'status', 'initialStatus', 'registered', 'apostado', 'pendente'}
+          total = 0
+          for shard in manifest['shards']:
+              payload = json.loads(Path('data/carteira-c2', shard['file']).read_text(encoding='utf-8'))
+              for game in payload.get('games', []):
+                  total += 1
+                  overlap = forbidden_fields.intersection(game)
+                  if overlap:
+                      raise SystemExit(f'Jogo {game.get("id")} contém campos operacionais: {sorted(overlap)}')
+          if total != 300:
+              raise SystemExit(f'Quantidade derivada inesperada: {total}')
+
+          migration = json.loads(Path('data/migrations/v11-operational-seed.json').read_text(encoding='utf-8'))
+          if migration.get('type') != 'operational-migration':
+              raise SystemExit('Migração operacional inválida')
+
+          print('Arquitetura v23 validada: carteira, shell e Service Worker separados.')
+          PY
