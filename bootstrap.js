@@ -4,6 +4,19 @@ const EXPECTED_WALLET = "SU Loto - C2";
 const EXPECTED_GAME_COUNT = 300;
 const FORBIDDEN_GAME_FIELDS = new Set(["status", "initialStatus", "registered", "apostado", "pendente"]);
 
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  const register = async () => {
+    try {
+      await navigator.serviceWorker.register("./service-worker.js");
+    } catch (error) {
+      console.warn("SU Loto: não foi possível registrar o Service Worker.", error);
+    }
+  };
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register, { once: true });
+}
+
 async function fetchJson(url) {
   const response = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error(`Falha ao carregar ${url} (HTTP ${response.status}).`);
@@ -110,6 +123,8 @@ async function loadApplication() {
 
   await Promise.allSettled([localModules, cloudModules]);
 }
+
+registerServiceWorker();
 
 loadApplication().catch(error => {
   console.error("SU Loto: falha ao iniciar a aplicação.", error);
