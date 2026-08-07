@@ -3,3 +3,4 @@ Coletar políticas de branch, anotações e status do deployment.
 Auditoria final após correção pelo workflow publicado na main.
 Confirmar novo encadeamento Beta -> workflow_dispatch(main) -> Pages.
 Reconsulta após conclusão do deploy encadeado.
+Diagnóstico somente-leitura dos runs e do ambiente público.
