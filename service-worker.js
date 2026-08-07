@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-v23-core-v1";
+const CACHE = "su-loto-c2-v23-sync-v1";
 
 const PRECACHE = [
   "./",
@@ -7,6 +7,7 @@ const PRECACHE = [
   "./contests.css",
   "./official-results.css",
   "./bootstrap.js",
+  "./sync-events.js",
   "./app.js",
   "./contests.js",
   "./official-results.js",
