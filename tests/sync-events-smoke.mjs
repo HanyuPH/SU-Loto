@@ -50,6 +50,7 @@ try {
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => document.querySelectorAll(".game-card[data-id]").length === 300, null, { timeout: 20_000 });
+  await page.waitForFunction(() => Boolean(globalThis.SULotoSyncEvents), null, { timeout: 10_000 });
   assert.equal(await page.evaluate(() => Boolean(globalThis.SULotoSyncEvents)), true, "Barramento de sincronização deve estar disponível offline");
 
   console.log("Smoke test aprovado: eventos centrais de status, concursos e apostas disponíveis, inclusive offline.");
