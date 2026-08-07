@@ -1,20 +1,16 @@
-const CACHE = "stable-su-loto-c2-v11";
-const ASSETS = [
+const CACHE = "su-loto-c2-v23-core-v1";
+
+const PRECACHE = [
   "./",
   "./index.html",
   "./styles.css",
   "./contests.css",
   "./official-results.css",
-  "./data/games-1.js",
-  "./data/games-2.js",
-  "./data/games-3.js",
-  "./data/games-4.js",
-  "./data/games-5.js",
-  "./data/games-6.js",
-  "./data/ultimo-concurso.json",
-  "./data/concursos-oficiais.json",
+  "./bootstrap.js",
+  "./app.js",
   "./contests.js",
   "./official-results.js",
+  "./beta-layout-review.js",
   "./cloud-sync.js",
   "./ecosystem-ui.js",
   "./ecosystem-backup.js",
@@ -23,14 +19,23 @@ const ASSETS = [
   "./contest-bets-cloud.js",
   "./contest-lock.js",
   "./contest-session.js",
-  "./beta-layout-review.js",
-  "./app.js",
+  "./data/carteira-c2/manifest.json",
+  "./data/carteira-c2/games-001-050.json",
+  "./data/carteira-c2/games-051-100.json",
+  "./data/carteira-c2/games-101-150.json",
+  "./data/carteira-c2/games-151-200.json",
+  "./data/carteira-c2/games-201-250.json",
+  "./data/carteira-c2/games-251-300.json",
+  "./data/migrations/v11-operational-seed.json",
+  "./data/ultimo-concurso.json",
+  "./data/concursos-oficiais.json",
+  "./data/concursos-oficiais.csv",
   "./manifest.json",
   "./icon.svg"
 ];
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(PRECACHE)));
   self.skipWaiting();
 });
 
@@ -40,7 +45,8 @@ self.addEventListener("activate", event => {
       keys
         .filter(key => (
           key.startsWith("stable-su-loto-c2-") ||
-          key.startsWith("su-loto-c2-stable-")
+          key.startsWith("su-loto-c2-stable-") ||
+          key.startsWith("su-loto-c2-v23-")
         ) && key !== CACHE)
         .map(key => caches.delete(key))
     ))
@@ -48,77 +54,37 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
-async function officialWithCloud(request) {
+async function cachedIgnoringVersion(request) {
+  return caches.match(request, { ignoreSearch: true });
+}
+
+async function networkFirst(request, { navigation = false } = {}) {
   const cache = await caches.open(CACHE);
-  let response;
   try {
-    response = await fetch(request, { cache: "no-store" });
+    const response = await fetch(request, { cache: "no-store" });
     if (response.ok) await cache.put(request, response.clone());
-  } catch {
-    response = await cache.match(request);
-  }
-
-  const loader = "\n;import('./beta-layout-review.js?v=2')"
-    + ".then(()=>import('./cloud-sync.js'))"
-    + ".then(()=>import('./ecosystem-ui.js?v=5'))"
-    + ".then(()=>import('./ecosystem-backup.js'))"
-    + ".then(()=>import('./prize-analysis.js?v=2'))"
-    + ".then(()=>import('./contest-bets.js?v=4'))"
-    + ".then(()=>import('./contest-bets-cloud.js?v=3'))"
-    + ".then(()=>import('./contest-lock.js?v=1'))"
-    + ".then(()=>import('./contest-session.js?v=1'))"
-    + ".catch(error=>console.error('SU Loto:',error));\n";
-
-  if (!response) {
-    return new Response(loader, {
-      headers: {
-        "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "no-store"
-      }
-    });
-  }
-
-  return new Response((await response.text()) + loader, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/javascript; charset=utf-8",
-      "Cache-Control": "no-store, no-cache, must-revalidate"
+    return response;
+  } catch (error) {
+    const cached = await cachedIgnoringVersion(request);
+    if (cached) return cached;
+    if (navigation) {
+      const shell = await cache.match("./index.html");
+      if (shell) return shell;
     }
-  });
+    throw error;
+  }
 }
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
+
   const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
 
-  if (url.origin === self.location.origin && url.pathname.endsWith("/official-results.js")) {
-    event.respondWith(officialWithCloud(event.request));
+  if (event.request.mode === "navigate") {
+    event.respondWith(networkFirst(event.request, { navigation: true }));
     return;
   }
 
-  if (
-    url.pathname.endsWith("/app.js") ||
-    url.pathname.endsWith("/ecosystem-ui.js") ||
-    url.pathname.endsWith("/prize-analysis.js") ||
-    url.pathname.endsWith("/contest-bets.js") ||
-    url.pathname.endsWith("/contest-bets-cloud.js") ||
-    url.pathname.endsWith("/contest-lock.js") ||
-    url.pathname.endsWith("/contest-session.js") ||
-    url.pathname.endsWith("/beta-layout-review.js") ||
-    url.pathname.endsWith("/cloud-sync.js") ||
-    url.pathname.endsWith("/ecosystem-backup.js")
-  ) {
-    event.respondWith(fetch(event.request, { cache: "no-store" }).catch(() => caches.match(event.request)));
-    return;
-  }
-
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        const copy = response.clone();
-        caches.open(CACHE).then(cache => cache.put(event.request, copy));
-        return response;
-      })
-      .catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
-  );
+  event.respondWith(networkFirst(event.request));
 });
