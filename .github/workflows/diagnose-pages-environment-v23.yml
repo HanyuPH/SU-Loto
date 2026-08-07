@@ -16,39 +16,67 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      FIX_COMMIT: 1359bf5b70bc84ae93c7f8228e898c697c5c141f
+      LOTO_BASE: https://hanyuph.github.io/SU-Loto
+      MEGA_BASE: https://hanyuph.github.io/SU-Mega
     steps:
-      - name: Coletar configuração e falha do Pages
+      - name: Coletar publicação final e ambiente público
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/pages-diag
-          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/31198454274" > /tmp/pages-diag/run.json
-          gh api "/repos/$GITHUB_REPOSITORY/check-runs/92932406559" > /tmp/pages-diag/deploy-check.json || true
-          gh api "/repos/$GITHUB_REPOSITORY/check-runs/92932406559/annotations" > /tmp/pages-diag/deploy-annotations.json || true
-          gh api "/repos/$GITHUB_REPOSITORY/environments/github-pages" > /tmp/pages-diag/environment.json || true
-          gh api "/repos/$GITHUB_REPOSITORY/environments/github-pages/deployment-branch-policies?per_page=100" > /tmp/pages-diag/branch-policies.json || true
-          gh api "/repos/$GITHUB_REPOSITORY/pages" > /tmp/pages-diag/pages.json || true
-          gh api "/repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=30" > /tmp/pages-diag/deployments.json || true
-          gh api "/repos/$GITHUB_REPOSITORY/deployments/5798368906/statuses" > /tmp/pages-diag/deployment-statuses.json || true
-          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/31198454274/artifacts" > /tmp/pages-diag/artifacts.json || true
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/pages-diag/main-runs.json
+          jq --arg sha "$FIX_COMMIT" '[.workflow_runs[] | select(.head_sha == $sha) | {id,name,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}]' /tmp/pages-diag/main-runs.json > /tmp/pages-diag/fix-runs.json
+          run_id=$(jq -r '.[] | select(.name == "Publicar SU Loto estável e Beta") | .id' /tmp/pages-diag/fix-runs.json | head -n1)
+          test -n "$run_id"
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > /tmp/pages-diag/final-pages-run.json
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" > /tmp/pages-diag/final-pages-jobs.json
+          gh api "/repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=50" > /tmp/pages-diag/deployments.json
+          deployment_id=$(jq -r --arg sha "$FIX_COMMIT" '.[] | select(.sha == $sha) | .id' /tmp/pages-diag/deployments.json | head -n1)
+          test -n "$deployment_id"
+          gh api "/repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" > /tmp/pages-diag/final-deployment-statuses.json
+          gh api "/repos/$GITHUB_REPOSITORY/environments/github-pages" > /tmp/pages-diag/environment.json
+          gh api "/repos/$GITHUB_REPOSITORY/environments/github-pages/deployment-branch-policies?per_page=100" > /tmp/pages-diag/branch-policies.json
+          gh api "/repos/$GITHUB_REPOSITORY/pages" > /tmp/pages-diag/pages.json
 
-          echo '=== DEPLOY CHECK ==='
-          jq '{status, conclusion, name, output, details_url}' /tmp/pages-diag/deploy-check.json 2>/dev/null || cat /tmp/pages-diag/deploy-check.json
-          echo '=== ANNOTATIONS ==='
-          jq '.' /tmp/pages-diag/deploy-annotations.json 2>/dev/null || cat /tmp/pages-diag/deploy-annotations.json
-          echo '=== ENVIRONMENT ==='
-          jq '.' /tmp/pages-diag/environment.json 2>/dev/null || cat /tmp/pages-diag/environment.json
-          echo '=== ALLOWED BRANCH POLICIES ==='
-          jq '.' /tmp/pages-diag/branch-policies.json 2>/dev/null || cat /tmp/pages-diag/branch-policies.json
-          echo '=== FAILED DEPLOYMENT STATUSES ==='
-          jq '.' /tmp/pages-diag/deployment-statuses.json 2>/dev/null || cat /tmp/pages-diag/deployment-statuses.json
-          echo '=== PAGES ==='
-          jq '.' /tmp/pages-diag/pages.json 2>/dev/null || cat /tmp/pages-diag/pages.json
+          audit="final-${FIX_COMMIT}-${GITHUB_RUN_ID}"
+          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/beta-banner.js?audit=$audit" > /tmp/pages-diag/loto-beta-banner.js
+          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/VERSION?audit=$audit" > /tmp/pages-diag/loto-beta-VERSION
+          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/bootstrap.js?audit=$audit" > /tmp/pages-diag/loto-beta-bootstrap.js
+          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/service-worker.js?audit=$audit" > /tmp/pages-diag/loto-beta-service-worker.js
+          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/index.html?audit=$audit" > /tmp/pages-diag/loto-beta-index.html
+          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/service-worker.js?audit=$audit" > /tmp/pages-diag/loto-stable-service-worker.js
+          curl -fsSL -H 'Cache-Control: no-cache' "$MEGA_BASE/beta/beta-banner.js?audit=$audit" > /tmp/pages-diag/mega-beta-banner.js
+          curl -fsSL -H 'Cache-Control: no-cache' "$MEGA_BASE/beta/service-worker.js?audit=$audit" > /tmp/pages-diag/mega-beta-service-worker.js
 
-      - name: Preservar diagnóstico
+          grep -Fq 'const BUILD = "v23"' /tmp/pages-diag/loto-beta-banner.js
+          grep -Fq 'latestBetaDocumented=v23' /tmp/pages-diag/loto-beta-VERSION
+          grep -Fq 'beta-banner.js?v=23' /tmp/pages-diag/loto-beta-bootstrap.js
+          grep -Fq 'su-loto-c2-v23-sync-v2' /tmp/pages-diag/loto-beta-service-worker.js
+          grep -Fq 'src="bootstrap.js"' /tmp/pages-diag/loto-beta-index.html
+          grep -Fq 'stable-su-loto-c2-v11' /tmp/pages-diag/loto-stable-service-worker.js
+          grep -Fq 'const BUILD = "v29"' /tmp/pages-diag/mega-beta-banner.js
+          grep -Fq 'su-mega-c2-beta-v29' /tmp/pages-diag/mega-beta-service-worker.js
+
+          jq -e '.conclusion == "success"' /tmp/pages-diag/final-pages-run.json >/dev/null
+          jq -e '[.jobs[] | select(.name == "build" or .name == "deploy" or .name == "Verificar publicação real do Ecossistema SU") | .conclusion] | all(. == "success")' /tmp/pages-diag/final-pages-jobs.json >/dev/null
+          jq -e '.[0].state == "success"' /tmp/pages-diag/final-deployment-statuses.json >/dev/null
+
+          printf 'workflow_run=%s\ndeployment_id=%s\nsource_commit=%s\nSU Loto Beta=v23\nSU Loto stable=v11\nSU Mega Beta=v29\n' "$run_id" "$deployment_id" "$FIX_COMMIT" > /tmp/pages-diag/RESUMO-FINAL.txt
+          echo '=== RESUMO FINAL ==='
+          cat /tmp/pages-diag/RESUMO-FINAL.txt
+          echo '=== RUN ==='
+          jq '{id,name,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}' /tmp/pages-diag/final-pages-run.json
+          echo '=== JOBS ==='
+          jq '[.jobs[] | {id,name,status,conclusion,started_at,completed_at,html_url}]' /tmp/pages-diag/final-pages-jobs.json
+          echo '=== DEPLOYMENT STATUS ==='
+          jq '.[0] | {id,state,environment,environment_url,created_at,updated_at,log_url}' /tmp/pages-diag/final-deployment-statuses.json
+
+      - name: Preservar diagnóstico final
         uses: actions/upload-artifact@v4
         with:
-          name: diagnostico-politica-pages-su-loto-v23
+          name: diagnostico-final-publicacao-su-loto-v23
           path: /tmp/pages-diag
           if-no-files-found: error
