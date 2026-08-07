@@ -1,0 +1,104 @@
+name: Validar encadeamento Resultado CAIXA e Pages SU Loto v23
+
+on:
+  push:
+    branches:
+      - agent/su-loto-v23-pages-results
+  pull_request:
+    branches:
+      - agent/su-loto-v23-sync-consolidation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-v23-pages-results-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pages-results:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar branch em validação
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+
+      - name: Auditar contrato do workflow oficial
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('candidate/.github/workflows/update-lotofacil-result.yml').read_text(encoding='utf-8')
+
+          required = [
+              'outputs:',
+              'changed: ${{ steps.publish.outputs.changed }}',
+              'echo "changed=false" >> "$GITHUB_OUTPUT"',
+              'echo "changed=true" >> "$GITHUB_OUTPUT"',
+              "if: needs.update-result.outputs.changed == 'true' && github.ref == 'refs/heads/main'",
+              'pages: write',
+              'id-token: write',
+              'actions/configure-pages@v5',
+              'actions/upload-pages-artifact@v4',
+              'actions/deploy-pages@v4',
+              'ref: main',
+              'ref: beta',
+              'public/beta/index.html'
+          ]
+          for token in required:
+              if token not in workflow:
+                  raise SystemExit(f'Requisito ausente no workflow oficial: {token}')
+
+          deploy_pos = workflow.find('deploy-pages:')
+          changed_pos = workflow.find("if: needs.update-result.outputs.changed == 'true'")
+          if deploy_pos < 0 or changed_pos < deploy_pos:
+              raise SystemExit('O deploy deve depender explicitamente do resultado do job de atualização.')
+
+          if 'permissions:\n  contents: write' in workflow:
+              raise SystemExit('Permissão contents:write não deve ser global; deve permanecer restrita ao job de atualização.')
+
+          print('Contrato do workflow CAIXA → commit → Pages aprovado.')
+          PY
+
+      - name: Baixar main estável para simulação
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: site-main
+
+      - name: Baixar Beta para simulação
+        uses: actions/checkout@v4
+        with:
+          ref: beta
+          path: site-beta
+
+      - name: Simular artefato do GitHub Pages
+        run: |
+          rm -rf public
+          mkdir -p public
+          rsync -a --delete --exclude='.git/' --exclude='.github/' site-main/ public/
+          mkdir -p public/beta
+          rsync -a --delete --exclude='.git/' --exclude='.github/' site-beta/ public/beta/
+          touch public/.nojekyll
+
+          test -f public/index.html
+          test -f public/data/ultimo-concurso.json
+          test -f public/data/concursos-oficiais.json
+          test -f public/data/concursos-oficiais.csv
+          test -f public/beta/index.html
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          latest = json.loads(Path('public/data/ultimo-concurso.json').read_text(encoding='utf-8'))
+          history = json.loads(Path('public/data/concursos-oficiais.json').read_text(encoding='utf-8'))
+          number = int(latest.get('numero') or latest.get('number') or latest.get('concurso') or 0)
+          if number <= 0:
+              raise SystemExit('ultimo-concurso.json não contém número de concurso válido.')
+          if not isinstance(history, list) or not history:
+              raise SystemExit('concursos-oficiais.json não contém histórico válido.')
+          print(f'Artefato simulado aprovado. Último concurso presente: {number}.')
+          PY
