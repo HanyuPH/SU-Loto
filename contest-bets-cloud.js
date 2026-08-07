@@ -117,8 +117,11 @@ function applyRemote(records) {
   const normalized = normalizeRecords(records);
   if (stable(normalized) === stable(localRecords())) return;
   applyingCloud = true;
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(normalized));
-  applyingCloud = false;
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(normalized));
+  } finally {
+    applyingCloud = false;
+  }
   window.dispatchEvent(new CustomEvent("su:contest-bets-cloud-updated", { detail: normalized }));
 }
 
@@ -148,6 +151,7 @@ async function uploadLocal() {
 }
 
 function scheduleUpload() {
+  if (applyingCloud) return;
   clearTimeout(uploadTimer);
   uploadTimer = setTimeout(uploadLocal, 180);
 }
@@ -175,13 +179,11 @@ async function start(user) {
   });
 }
 
-const previousSetItem = Storage.prototype.setItem;
-Storage.prototype.setItem = function(key, value) {
-  const oldValue = this.getItem(key);
-  previousSetItem.call(this, key, value);
-  if (this === localStorage && key === LOCAL_KEY && !applyingCloud && oldValue !== String(value)) scheduleUpload();
-};
+globalThis.SULotoSyncEvents?.subscribe?.(event => {
+  if (event.domain === "contestBets" && event.source !== "cloud" && !applyingCloud) scheduleUpload();
+});
 
+// Compatibilidade durante a transição: o módulo local já emite este evento explicitamente.
 window.addEventListener("su:contest-bets-updated", scheduleUpload);
 
 const statusTimer = setInterval(() => {
