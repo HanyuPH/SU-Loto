@@ -5,19 +5,38 @@ on:
     branches: [main, beta]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 concurrency:
   group: github-pages-su-loto
   cancel-in-progress: false
 
 jobs:
+  request-main-deploy:
+    name: Solicitar publicação pela main
+    if: github.ref == 'refs/heads/beta'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Disparar publicador autorizado na main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/pages-main-beta.yml/dispatches" \
+            -f ref=main
+          echo "Publicação solicitada à main para incorporar a Beta atual em /beta/."
+
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - name: Baixar versão estável
         uses: actions/checkout@v4
@@ -80,12 +99,16 @@ jobs:
           path: public
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Publicar no GitHub Pages
         id: deployment
@@ -93,6 +116,7 @@ jobs:
 
   verify-live:
     name: Verificar publicação real do Ecossistema SU
+    if: github.ref == 'refs/heads/main'
     needs: deploy
     runs-on: ubuntu-latest
     timeout-minutes: 5
