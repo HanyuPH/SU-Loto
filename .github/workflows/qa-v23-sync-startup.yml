@@ -1,0 +1,107 @@
+name: QA temporário startup sincronização SU Loto v23
+
+on:
+  push:
+    branches:
+      - agent/su-loto-v23-sync-startup-fix
+  pull_request:
+    branches:
+      - beta
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Baixar correção
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validar escopo e Carteira C2
+        run: |
+          node scripts/validate-wallet-data.mjs
+          git fetch origin beta
+          changed="$(git diff --name-only origin/beta...HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -E '^data/carteira-c2/|^data/migrations/|^VERSION$'; then
+            echo 'Falha: a correção não pode alterar Carteira C2, migrações ou VERSION.' >&2
+            exit 1
+          fi
+
+      - name: Validar arquitetura e sintaxe
+        run: |
+          node --check cloud-sync.js
+          node --check sync-local-first-guard.js
+          node --check bootstrap.js
+          node --check service-worker.js
+          node --check tests/sync-startup-architecture-smoke.mjs
+          node --check tests/sync-startup-ux-smoke.mjs
+          node tests/sync-startup-architecture-smoke.mjs
+
+      - name: Instalar navegadores de QA
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium webkit
+
+      - name: Iniciar Beta localmente
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/su-loto-qa-server.log 2>&1 &
+          echo $! > /tmp/su-loto-qa-server.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/su-loto-qa-server.log
+          exit 1
+
+      - name: Local-first Chromium
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+          QA_BROWSER: chromium
+        run: timeout 90s node tests/sync-local-first-smoke.mjs
+
+      - name: Local-first WebKit
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+          QA_BROWSER: webkit
+        run: timeout 90s node tests/sync-local-first-smoke.mjs
+
+      - name: UX startup Chromium
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+          QA_BROWSER: chromium
+        run: timeout 90s node tests/sync-startup-ux-smoke.mjs
+
+      - name: UX startup WebKit
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+          QA_BROWSER: webkit
+        run: timeout 90s node tests/sync-startup-ux-smoke.mjs
+
+      - name: Performance seis concursos Chromium
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+          QA_BROWSER: chromium
+        run: timeout 90s node tests/status-click-performance-smoke.mjs
+
+      - name: Performance seis concursos WebKit
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+          QA_BROWSER: webkit
+        run: timeout 90s node tests/status-click-performance-smoke.mjs
+
+      - name: Encerrar servidor
+        if: always()
+        run: |
+          if [ -f /tmp/su-loto-qa-server.pid ]; then
+            kill "$(cat /tmp/su-loto-qa-server.pid)" 2>/dev/null || true
+          fi
