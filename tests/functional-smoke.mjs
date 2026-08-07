@@ -36,10 +36,12 @@ try {
   await page.waitForFunction(() => document.querySelectorAll(".game-card[data-id]").length === 300, null, { timeout: 30_000 });
   await page.waitForFunction(() => Boolean(globalThis.SULotoContests), null, { timeout: 10_000 });
 
-  await page.waitForSelector("#official-refresh", { state: "attached", timeout: 10_000 });
-  await page.locator("#official-refresh").click({ force: true });
+  await page.locator('.view-tab[data-view="contests-view"]').click();
+  await page.waitForFunction(() => !document.querySelector("#contests-view")?.hidden);
+  await page.waitForSelector("#official-refresh", { state: "visible", timeout: 10_000 });
+  await page.locator("#official-refresh").click();
   await page.waitForFunction(() => document.querySelector("#official-preview-title")?.textContent?.includes("99992"), null, { timeout: 15_000 });
-  await page.locator("#official-register").click({ force: true });
+  await page.locator("#official-register").click();
   await page.waitForFunction(() => (globalThis.SULotoContests.exportData() || []).some(item => Number(item.number) === 99992));
 
   const contest = await page.evaluate(() => (globalThis.SULotoContests.exportData() || []).find(item => Number(item.number) === 99992));
@@ -59,6 +61,7 @@ try {
   }, exported);
   assert.equal(restored, true, "Reimportação do histórico deve ser aceita");
 
+  await page.locator('.view-tab[data-view="wallet-view"]').click();
   await page.locator("#search").fill("43");
   await page.waitForFunction(() => document.querySelector('.game-card[data-id="43"]') && !document.querySelector('.game-card[data-id="43"]').hidden);
   assert.equal(await page.locator('.game-card[data-id="43"]').isVisible(), true, "Busca por jogo deve localizar o ID 043");
