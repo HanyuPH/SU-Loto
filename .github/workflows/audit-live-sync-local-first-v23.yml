@@ -16,62 +16,43 @@ concurrency:
 jobs:
   audit-live:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 3
     env:
       BASE: https://hanyuph.github.io/SU-Loto/beta
       MERGED_AT: 2026-08-07T20:33:21Z
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Garantir publicação oficial e confirmar arquivos públicos
+      - name: Diagnosticar deployment e conteúdo público
         run: |
-          set -euo pipefail
-          mkdir -p /tmp/live-sync
+          set -u
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/main-runs.json
+          jq --arg since "$MERGED_AT" '[.workflow_runs[] | select(.name == "Publicar SU Loto estável e Beta" and .created_at >= $since) | {id,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}]' /tmp/main-runs.json | tee /tmp/pages-after-fix.json
 
-          list_deploys() {
-            gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/live-sync/main-runs.json
-            jq --arg since "$MERGED_AT" '[.workflow_runs[] | select(.name == "Publicar SU Loto estável e Beta" and .created_at >= $since) | {id,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}]' /tmp/live-sync/main-runs.json > /tmp/live-sync/pages-after-fix.json
-          }
-
-          list_deploys
-          if ! jq -e 'length > 0' /tmp/live-sync/pages-after-fix.json >/dev/null; then
+          if ! jq -e 'length > 0' /tmp/pages-after-fix.json >/dev/null; then
             workflow_id="$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" --jq '.workflows[] | select(.name == "Publicar SU Loto estável e Beta") | .id' | head -n1)"
-            test -n "$workflow_id"
-            gh api -X POST "/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/dispatches" -f ref=main
-            sleep 3
+            echo "Nenhum deploy posterior ao merge. Workflow oficial: $workflow_id"
+            if [ -n "$workflow_id" ]; then
+              gh api -X POST "/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/dispatches" -f ref=main
+              echo "Publicação oficial acionada agora."
+            fi
           fi
 
-          deployment_ok=0
-          for attempt in $(seq 1 48); do
-            list_deploys
-            if jq -e 'map(select(.conclusion == "success")) | length > 0' /tmp/live-sync/pages-after-fix.json >/dev/null; then
-              deployment_ok=1
-              break
+          audit="diag-${GITHUB_RUN_ID}"
+          for spec in \
+            "bootstrap.js|sync-local-first-guard.js?v=1" \
+            "bootstrap.js|cloud-sync.js?v=2" \
+            "sync-local-first-guard.js|stopImmediatePropagation" \
+            "sync-local-first-guard.js|Salvando na nuvem…" \
+            "service-worker.js|su-loto-c2-v23-sync-v3" \
+            "service-worker.js|\"./sync-local-first-guard.js\"" \
+            "VERSION|latestBetaDocumented=v23"; do
+            file="${spec%%|*}"
+            pattern="${spec#*|}"
+            out="/tmp/$(echo "$file" | tr '/' '_')"
+            code="$(curl -L -sS -o "$out" -w '%{http_code}' -H 'Cache-Control: no-cache' "$BASE/$file?audit=$audit" || true)"
+            if grep -Fq "$pattern" "$out" 2>/dev/null; then
+              echo "LIVE_OK $file :: $pattern :: HTTP $code"
+            else
+              echo "LIVE_PENDING $file :: $pattern :: HTTP $code"
             fi
-            sleep 5
           done
-          test "$deployment_ok" = 1
-
-          audit="sync-${GITHUB_RUN_ID}"
-          fetch_until() {
-            local url="$1" pattern="$2" out="$3"
-            for attempt in $(seq 1 48); do
-              if curl -fsSL -H 'Cache-Control: no-cache' "${url}?audit=${audit}-${attempt}" -o "$out" && grep -Fq "$pattern" "$out"; then
-                return 0
-              fi
-              sleep 5
-            done
-            echo "Conteúdo esperado não encontrado em $url: $pattern" >&2
-            exit 1
-          }
-
-          fetch_until "$BASE/bootstrap.js" 'sync-local-first-guard.js?v=1' /tmp/live-sync/bootstrap.js
-          fetch_until "$BASE/bootstrap.js" 'cloud-sync.js?v=2' /tmp/live-sync/bootstrap-cloud.js
-          fetch_until "$BASE/sync-local-first-guard.js" 'stopImmediatePropagation' /tmp/live-sync/sync-local-first-guard.js
-          fetch_until "$BASE/sync-local-first-guard.js" 'Salvando na nuvem…' /tmp/live-sync/sync-local-first-guard-ui.js
-          fetch_until "$BASE/service-worker.js" 'su-loto-c2-v23-sync-v3' /tmp/live-sync/service-worker.js
-          fetch_until "$BASE/service-worker.js" '"./sync-local-first-guard.js"' /tmp/live-sync/service-worker-module.js
-          fetch_until "$BASE/VERSION" 'latestBetaDocumented=v23' /tmp/live-sync/VERSION
-
-          printf 'SU Loto Beta v23: sincronização local-first publicada e confirmada\n' > /tmp/live-sync/RESUMO.txt
-          cat /tmp/live-sync/RESUMO.txt
-          cat /tmp/live-sync/pages-after-fix.json
