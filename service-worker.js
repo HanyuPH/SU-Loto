@@ -21,6 +21,7 @@ const PRECACHE = [
   "./contest-bets-cloud.js",
   "./contest-lock.js",
   "./contest-session.js",
+  "./contest-selection-highlight.js",
   "./data/carteira-c2/manifest.json",
   "./data/carteira-c2/games-001-050.json",
   "./data/carteira-c2/games-051-100.json",
