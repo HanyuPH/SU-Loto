@@ -8,91 +8,82 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  actions: write
 
 concurrency:
-  group: github-pages-su-loto-audit-v23
+  group: auditoria-publicacao-su-loto-v23
   cancel-in-progress: false
 
 jobs:
-  build:
+  dispatch-and-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Baixar versão estável
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: stable
-
-      - name: Baixar versão Beta atual
-        uses: actions/checkout@v4
-        with:
-          ref: beta
-          path: beta-source
-
-      - name: Montar artefato real do Pages
-        run: |
-          set -euo pipefail
-          rm -rf public
-          mkdir -p public/beta
-          rsync -a --delete --exclude='.git/' --exclude='.github/' stable/ public/
-          mkdir -p public/beta
-          rsync -a --delete --exclude='.git/' --exclude='.github/' beta-source/ public/beta/
-          touch public/.nojekyll public/beta/.nojekyll
-
-          test -f public/index.html
-          test -f public/service-worker.js
-          grep -q 'stable-su-loto-c2-v11' public/service-worker.js
-
-          test -f public/beta/index.html
-          test -f public/beta/VERSION
-          test -f public/beta/bootstrap.js
-          test -f public/beta/beta-banner.js
-          test -f public/beta/service-worker.js
-          grep -q '^latestBetaDocumented=v23$' public/beta/VERSION
-          grep -q 'const BUILD = "v23"' public/beta/beta-banner.js
-          grep -q 'beta-banner.js?v=23' public/beta/bootstrap.js
-          grep -q 'su-loto-c2-v23-sync-v2' public/beta/service-worker.js
-          grep -q 'src="bootstrap.js"' public/beta/index.html
-          node --check public/beta/bootstrap.js
-          node --check public/beta/beta-banner.js
-          node --check public/beta/service-worker.js
-          (cd public/beta && node scripts/validate-wallet-data.mjs)
-
-      - name: Configurar GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Enviar artefato Pages
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: public
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Publicar artefato auditado
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  verify-live:
-    needs: deploy
-    runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
     env:
       LOTO_BASE: https://hanyuph.github.io/SU-Loto
       MEGA_BASE: https://hanyuph.github.io/SU-Mega
     steps:
-      - name: Conferir ambiente publicado com cache-busting
+      - name: Disparar workflow oficial do Pages na branch beta
+        id: pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/live-audit
+          endpoint="/repos/$GITHUB_REPOSITORY/actions/workflows/pages-main-beta.yml/runs?branch=beta&event=workflow_dispatch&per_page=20"
+          before_ids=$(gh api "$endpoint" --jq '.workflow_runs[].id' 2>/dev/null || true)
+
+          gh api --method POST \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/pages-main-beta.yml/dispatches" \
+            -f ref=beta
+
+          run_id=""
+          for attempt in $(seq 1 30); do
+            current_ids=$(gh api "$endpoint" --jq '.workflow_runs[].id' 2>/dev/null || true)
+            for candidate in $current_ids; do
+              if ! grep -qx "$candidate" <<<"$before_ids"; then
+                run_id="$candidate"
+                break
+              fi
+            done
+            test -n "$run_id" && break
+            sleep 2
+          done
+
+          if test -z "$run_id"; then
+            echo 'Não foi possível localizar o workflow_dispatch recém-criado.' >&2
+            echo 'run_id=' >> "$GITHUB_OUTPUT"
+            echo 'conclusion=not-found' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Workflow Pages localizado: $run_id"
+
+          conclusion=""
+          for attempt in $(seq 1 90); do
+            gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > /tmp/live-audit/pages-run.json
+            status=$(jq -r '.status' /tmp/live-audit/pages-run.json)
+            conclusion=$(jq -r '.conclusion // ""' /tmp/live-audit/pages-run.json)
+            echo "Pages run $run_id: status=$status conclusion=$conclusion"
+            if test "$status" = "completed"; then break; fi
+            sleep 4
+          done
+
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" > /tmp/live-audit/pages-jobs.json || true
+          head_sha=$(jq -r '.head_sha // ""' /tmp/live-audit/pages-run.json)
+          html_url=$(jq -r '.html_url // ""' /tmp/live-audit/pages-run.json)
+          printf '%s\n' "$head_sha" > /tmp/live-audit/PUBLISHED-SOURCE-COMMIT.txt
+          printf '%s\n' "$run_id" > /tmp/live-audit/PAGES-WORKFLOW-RUN.txt
+          printf '%s\n' "$html_url" > /tmp/live-audit/PAGES-WORKFLOW-URL.txt
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+      - name: Conferir ambiente publicado com cache-busting
+        id: live
+        if: steps.pages.outputs.conclusion == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
           audit="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
           fetch_until() {
@@ -101,7 +92,7 @@ jobs:
             local pattern="$3"
             local output="$4"
             local attempt
-            for attempt in $(seq 1 36); do
+            for attempt in $(seq 1 48); do
               code=$(curl --silent --show-error --location \
                 --header 'Cache-Control: no-cache' \
                 --write-out '%{http_code}' --output "$output" \
@@ -131,8 +122,17 @@ jobs:
           printf 'SU Loto: Beta v23 confirmada\nSU Mega: Beta v29 confirmada\n' | tee /tmp/live-audit/RESUMO.txt
 
       - name: Preservar evidência da auditoria pública
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: auditoria-publicacao-su-loto-v23-su-mega-v29
           path: /tmp/live-audit
           if-no-files-found: error
+
+      - name: Concluir auditoria
+        if: always()
+        run: |
+          set -euo pipefail
+          test "${{ steps.pages.outputs.conclusion }}" = "success"
+          test "${{ steps.live.outcome }}" = "success"
+          test -f /tmp/live-audit/RESUMO.txt
