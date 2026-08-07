@@ -139,7 +139,6 @@
   let installPrompt=null;const installBtn=document.getElementById("install-btn");
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPrompt=e;installBtn.hidden=false});
   installBtn.addEventListener("click",async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;installBtn.hidden=true}else{alert("No iPhone, toque em Compartilhar e depois em Adicionar à Tela de Início.")}});
-  if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(()=>{}));
 
   load();render();initViewTabs();
   if(globalThis.SULotoContests&&typeof globalThis.SULotoContests.init==="function")globalThis.SULotoContests.init({games,states,labels,pad,toast,formatDate,downloadJson});
