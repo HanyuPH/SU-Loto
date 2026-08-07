@@ -152,11 +152,11 @@
     injectCloudUxStyle();
     const rawText = String(label.textContent || "").trim();
     const state = String(button.dataset.state || "");
-    const backgroundSaving = state === "saving" && /Salvando (alterações|na nuvem|concursos)/i.test(rawText);
+    const backgroundSaving = state === "saving" && /^(Salvando (alterações|na nuvem|concursos)|Verificando login|Preparando sincronização|Conectando à nuvem|Conexão lenta|Reconectando)/i.test(rawText);
     const synced = state === "synced" || /Sincronizado/i.test(rawText);
 
     if (backgroundSaving) {
-      if (rawText !== "Salvando na nuvem…") label.textContent = "Salvando na nuvem…";
+      if (/^Salvando (alterações|concursos)/i.test(rawText)) label.textContent = "Salvando na nuvem…";
       root.dataset.syncQuiet = "true";
       return true;
     }
@@ -166,9 +166,8 @@
       return true;
     }
 
-    // Login, reconexão, sincronização manual, offline e erros continuam visíveis
-    // porque exigem atenção do usuário. Apenas a sincronização normal de fundo
-    // fica compacta no canto inferior direito.
+    // Login manual, sincronização manual, offline e erros continuam visíveis.
+    // Inicialização, reconexão e salvamento normal ficam compactos no canto.
     root.dataset.syncQuiet = "false";
     return true;
   }
