@@ -1,0 +1,58 @@
+name: Auditar destaque publicado SU Loto v23
+
+on:
+  pull_request:
+    branches: [beta]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      BASE: https://hanyuph.github.io/SU-Loto/beta
+      MERGED_AT: 2026-08-07T17:28:21Z
+    steps:
+      - name: Confirmar deployment posterior à correção e arquivos públicos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/live-selection
+
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/live-selection/main-runs.json
+          jq --arg since "$MERGED_AT" '[.workflow_runs[] | select(.name == "Publicar SU Loto estável e Beta" and .created_at >= $since) | {id,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}]' /tmp/live-selection/main-runs.json > /tmp/live-selection/pages-after-fix.json
+          jq -e 'map(select(.conclusion == "success")) | length > 0' /tmp/live-selection/pages-after-fix.json >/dev/null
+
+          audit="selection-${GITHUB_RUN_ID}"
+          fetch_until() {
+            local url="$1" pattern="$2" out="$3"
+            for attempt in $(seq 1 36); do
+              if curl -fsSL -H 'Cache-Control: no-cache' "${url}?audit=${audit}-${attempt}" -o "$out" && grep -Fq "$pattern" "$out"; then
+                return 0
+              fi
+              sleep 5
+            done
+            echo "Conteúdo esperado não encontrado em $url: $pattern" >&2
+            exit 1
+          }
+
+          fetch_until "$BASE/bootstrap.js" 'contest-selection-highlight.js?v=1' /tmp/live-selection/bootstrap.js
+          fetch_until "$BASE/contest-selection-highlight.js" '2px solid #7b2b91' /tmp/live-selection/contest-selection-highlight.js
+          fetch_until "$BASE/contest-selection-highlight.js" 'aria-current' /tmp/live-selection/contest-selection-highlight-aria.js
+          fetch_until "$BASE/service-worker.js" '"./contest-selection-highlight.js"' /tmp/live-selection/service-worker.js
+          fetch_until "$BASE/VERSION" 'latestBetaDocumented=v23' /tmp/live-selection/VERSION
+
+          printf 'SU Loto Beta v23: destaque de concurso publicado e confirmado\n' > /tmp/live-selection/RESUMO.txt
+          cat /tmp/live-selection/RESUMO.txt
+          cat /tmp/live-selection/pages-after-fix.json
+
+      - name: Preservar evidência temporária
+        uses: actions/upload-artifact@v4
+        with:
+          name: auditoria-live-destaque-concurso-v23
+          path: /tmp/live-selection
+          if-no-files-found: error
