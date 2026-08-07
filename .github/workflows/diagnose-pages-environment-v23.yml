@@ -1,0 +1,47 @@
+name: Diagnosticar política do GitHub Pages SU Loto
+
+on:
+  pull_request:
+    branches: [beta]
+    paths:
+      - "docs/TRIGGER-PAGES-DIAG-v23.txt"
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  deployments: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Coletar configuração e falha do Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pages-diag
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/31198454274" > /tmp/pages-diag/run.json
+          gh api "/repos/$GITHUB_REPOSITORY/check-runs/92932406559" > /tmp/pages-diag/deploy-check.json || true
+          gh api "/repos/$GITHUB_REPOSITORY/environments/github-pages" > /tmp/pages-diag/environment.json || true
+          gh api "/repos/$GITHUB_REPOSITORY/pages" > /tmp/pages-diag/pages.json || true
+          gh api "/repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=30" > /tmp/pages-diag/deployments.json || true
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/31198454274/artifacts" > /tmp/pages-diag/artifacts.json || true
+
+          echo '=== DEPLOY CHECK ==='
+          jq '{status, conclusion, name, output, details_url}' /tmp/pages-diag/deploy-check.json 2>/dev/null || cat /tmp/pages-diag/deploy-check.json
+          echo '=== ENVIRONMENT ==='
+          jq '.' /tmp/pages-diag/environment.json 2>/dev/null || cat /tmp/pages-diag/environment.json
+          echo '=== PAGES ==='
+          jq '.' /tmp/pages-diag/pages.json 2>/dev/null || cat /tmp/pages-diag/pages.json
+          echo '=== RECENT DEPLOYMENTS ==='
+          jq '[.[] | {id, ref, sha, environment, created_at, updated_at, statuses_url}]' /tmp/pages-diag/deployments.json 2>/dev/null || cat /tmp/pages-diag/deployments.json
+
+      - name: Preservar diagnóstico
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-politica-pages-su-loto-v23
+          path: /tmp/pages-diag
+          if-no-files-found: error
