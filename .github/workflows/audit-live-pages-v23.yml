@@ -1,0 +1,138 @@
+name: Auditar publicação real SU Loto Beta v23
+
+on:
+  pull_request:
+    branches: [beta]
+    paths:
+      - "docs/TRIGGER-PAGES-DEPLOY-v23.txt"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages-su-loto-audit-v23
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar versão estável
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: stable
+
+      - name: Baixar versão Beta atual
+        uses: actions/checkout@v4
+        with:
+          ref: beta
+          path: beta-source
+
+      - name: Montar artefato real do Pages
+        run: |
+          set -euo pipefail
+          rm -rf public
+          mkdir -p public/beta
+          rsync -a --delete --exclude='.git/' --exclude='.github/' stable/ public/
+          mkdir -p public/beta
+          rsync -a --delete --exclude='.git/' --exclude='.github/' beta-source/ public/beta/
+          touch public/.nojekyll public/beta/.nojekyll
+
+          test -f public/index.html
+          test -f public/service-worker.js
+          grep -q 'stable-su-loto-c2-v11' public/service-worker.js
+
+          test -f public/beta/index.html
+          test -f public/beta/VERSION
+          test -f public/beta/bootstrap.js
+          test -f public/beta/beta-banner.js
+          test -f public/beta/service-worker.js
+          grep -q '^latestBetaDocumented=v23$' public/beta/VERSION
+          grep -q 'const BUILD = "v23"' public/beta/beta-banner.js
+          grep -q 'beta-banner.js?v=23' public/beta/bootstrap.js
+          grep -q 'su-loto-c2-v23-sync-v2' public/beta/service-worker.js
+          grep -q 'src="bootstrap.js"' public/beta/index.html
+          node --check public/beta/bootstrap.js
+          node --check public/beta/beta-banner.js
+          node --check public/beta/service-worker.js
+          (cd public/beta && node scripts/validate-wallet-data.mjs)
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Enviar artefato Pages
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar artefato auditado
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  verify-live:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      LOTO_BASE: https://hanyuph.github.io/SU-Loto
+      MEGA_BASE: https://hanyuph.github.io/SU-Mega
+    steps:
+      - name: Conferir ambiente publicado com cache-busting
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/live-audit
+          audit="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          fetch_until() {
+            local label="$1"
+            local url="$2"
+            local pattern="$3"
+            local output="$4"
+            local attempt
+            for attempt in $(seq 1 36); do
+              code=$(curl --silent --show-error --location \
+                --header 'Cache-Control: no-cache' \
+                --write-out '%{http_code}' --output "$output" \
+                "${url}?audit=${audit}-${attempt}" || true)
+              if test "$code" = "200" && grep -Fq "$pattern" "$output"; then
+                printf '%s\tHTTP %s\t%s\t%s\n' "$label" "$code" "$pattern" "$url" | tee -a /tmp/live-audit/resultados.txt
+                sha256sum "$output" | tee -a /tmp/live-audit/hashes.txt
+                return 0
+              fi
+              sleep 5
+            done
+            echo "FALHA: $label — $url não apresentou '$pattern'." >&2
+            if test -f "$output"; then head -c 1500 "$output" >&2 || true; fi
+            return 1
+          }
+
+          fetch_until 'SU Loto Beta banner' "$LOTO_BASE/beta/beta-banner.js" 'const BUILD = "v23"' /tmp/live-audit/loto-beta-banner.js
+          fetch_until 'SU Loto Beta VERSION' "$LOTO_BASE/beta/VERSION" 'latestBetaDocumented=v23' /tmp/live-audit/loto-beta-VERSION
+          fetch_until 'SU Loto Beta bootstrap' "$LOTO_BASE/beta/bootstrap.js" 'beta-banner.js?v=23' /tmp/live-audit/loto-beta-bootstrap.js
+          fetch_until 'SU Loto Beta Service Worker' "$LOTO_BASE/beta/service-worker.js" 'su-loto-c2-v23-sync-v2' /tmp/live-audit/loto-beta-service-worker.js
+          fetch_until 'SU Loto Beta index' "$LOTO_BASE/beta/index.html" 'src="bootstrap.js"' /tmp/live-audit/loto-beta-index.html
+          fetch_until 'SU Loto estável v11' "$LOTO_BASE/service-worker.js" 'stable-su-loto-c2-v11' /tmp/live-audit/loto-stable-service-worker.js
+
+          fetch_until 'SU Mega Beta banner' "$MEGA_BASE/beta/beta-banner.js" 'const BUILD = "v29"' /tmp/live-audit/mega-beta-banner.js
+          fetch_until 'SU Mega Beta Service Worker' "$MEGA_BASE/beta/service-worker.js" 'su-mega-c2-beta-v29' /tmp/live-audit/mega-beta-service-worker.js
+
+          printf 'SU Loto: Beta v23 confirmada\nSU Mega: Beta v29 confirmada\n' | tee /tmp/live-audit/RESUMO.txt
+
+      - name: Preservar evidência da auditoria pública
+        uses: actions/upload-artifact@v4
+        with:
+          name: auditoria-publicacao-su-loto-v23-su-mega-v29
+          path: /tmp/live-audit
+          if-no-files-found: error
