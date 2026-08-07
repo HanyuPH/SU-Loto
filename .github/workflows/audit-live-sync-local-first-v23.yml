@@ -16,19 +16,34 @@ concurrency:
 jobs:
   audit-live:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
+      SINCE: 2026-08-07T20:43:45Z
     steps:
-      - name: Identificar workflow oficial e confirmar correção live
+      - name: Confirmar workflow verde e correção live
         run: |
           set -euo pipefail
-          gh api "/repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" \
-            --jq '.workflows[] | select(.name == "Publicar SU Loto estável e Beta") | {id,name,path,state}'
+          ok=0
+          for attempt in $(seq 1 48); do
+            gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/runs.json
+            jq --arg since "$SINCE" '[.workflow_runs[] | select(.name == "Publicar SU Loto estável e Beta" and .created_at >= $since) | {id,event,status,conclusion,head_sha,created_at,updated_at,html_url}]' /tmp/runs.json | tee /tmp/post-fix-runs.json
+            if jq -e 'map(select(.conclusion == "success")) | length > 0' /tmp/post-fix-runs.json >/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ok" = 1
+
+          audit="final-${GITHUB_RUN_ID}"
           curl -fsSL -H 'Cache-Control: no-cache' \
-            "https://hanyuph.github.io/SU-Loto/beta/service-worker.js?audit=${GITHUB_RUN_ID}" \
+            "https://hanyuph.github.io/SU-Loto/beta/service-worker.js?audit=$audit" \
             | grep -F 'su-loto-c2-v23-sync-v3'
           curl -fsSL -H 'Cache-Control: no-cache' \
-            "https://hanyuph.github.io/SU-Loto/beta/sync-local-first-guard.js?audit=${GITHUB_RUN_ID}" \
+            "https://hanyuph.github.io/SU-Loto/beta/sync-local-first-guard.js?audit=$audit" \
             | grep -F 'stopImmediatePropagation'
-          echo 'LIVE_OK: correção local-first publicada.'
+          curl -fsSL -H 'Cache-Control: no-cache' \
+            "https://hanyuph.github.io/SU-Loto/beta/bootstrap.js?audit=$audit" \
+            | grep -F 'sync-local-first-guard.js?v=1'
+          echo 'FINAL_OK: workflow oficial verde e correção local-first publicada.'
