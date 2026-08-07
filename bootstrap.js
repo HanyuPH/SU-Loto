@@ -106,6 +106,7 @@ async function loadApplication() {
   await import("./contests.js");
   await import("./app.js");
   await import("./official-results.js");
+  await import("./sync-events.js");
 
   const localModules = import("./beta-layout-review.js?v=2")
     .then(() => import("./prize-analysis.js?v=2"))
