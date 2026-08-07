@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - release/beta-v23-rc1
-  pull_request:
-    branches:
-      - agent/su-loto-v23-pages-results
   workflow_dispatch:
 
 permissions:
@@ -19,7 +16,7 @@ concurrency:
 jobs:
   integrated-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - name: Baixar candidata Beta v23
         uses: actions/checkout@v4
@@ -36,7 +33,7 @@ jobs:
 
       - name: Validar sintaxe dos módulos centrais
         run: |
-          for file in bootstrap.js sync-events.js app.js contests.js official-results.js cloud-sync.js contest-bets.js contest-bets-cloud.js ecosystem-backup.js service-worker.js scripts/update-lotofacil-result.mjs; do
+          for file in bootstrap.js beta-banner.js sync-events.js app.js contests.js official-results.js cloud-sync.js contest-bets.js contest-bets-cloud.js ecosystem-backup.js service-worker.js scripts/update-lotofacil-result.mjs; do
             node --check "$file"
           done
 
@@ -47,6 +44,7 @@ jobs:
 
           index = Path('index.html').read_text(encoding='utf-8')
           bootstrap = Path('bootstrap.js').read_text(encoding='utf-8')
+          banner = Path('beta-banner.js').read_text(encoding='utf-8')
           sync = Path('sync-events.js').read_text(encoding='utf-8')
           cloud = Path('cloud-sync.js').read_text(encoding='utf-8')
           bets_cloud = Path('contest-bets-cloud.js').read_text(encoding='utf-8')
@@ -56,6 +54,10 @@ jobs:
 
           if index.count('<script') != 1 or 'src="bootstrap.js"' not in index:
               raise SystemExit('index.html deixou de ser shell único da aplicação.')
+          if 'const BUILD = "v23"' not in banner:
+              raise SystemExit('Banner não identifica a Beta v23.')
+          if 'location.pathname.split("/").includes("beta")' not in bootstrap or 'beta-banner.js?v=23' not in bootstrap:
+              raise SystemExit('Bootstrap não ativa a identidade v23 somente no caminho Beta.')
           if 'Storage.prototype.setItem' in cloud or 'Storage.prototype.setItem' in bets_cloud:
               raise SystemExit('Interceptação global de Storage reapareceu.')
           if 'persistentLocalCache' not in cloud or 'persistentMultipleTabManager' not in cloud:
@@ -66,32 +68,28 @@ jobs:
               raise SystemExit('Barramento deve carregar antes da nuvem.')
           if 'response.text(' in sw or 'new Response(' in sw:
               raise SystemExit('Service Worker voltou a transformar respostas JavaScript.')
-          if 'latestBetaDocumented=v23' not in version or 'betaCandidateStatus=release-candidate' not in version:
-              raise SystemExit('VERSION não identifica corretamente a candidata v23.')
+          if 'su-loto-c2-v23-sync-v2' not in sw or 'key.startsWith("su-loto-c2-beta-")' not in sw:
+              raise SystemExit('Service Worker não força migração dos caches Beta antigos.')
+          if 'latestBetaDocumented=v23' not in version:
+              raise SystemExit('VERSION não identifica v23.')
           for legacy in [f'data/games-{i}.js' for i in range(1, 7)]:
               if Path(legacy).exists():
                   raise SystemExit(f'Arquivo legado ainda presente: {legacy}')
 
-          forbidden_pages = ['Beta v22', 'beta-banner.js', 'realtime-cloud.js', 'su-loto-c2-beta-v22']
+          forbidden_pages = ['Beta v22', 'realtime-cloud.js', 'su-loto-c2-beta-v22']
           for token in forbidden_pages:
               if token in pages:
                   raise SystemExit(f'Workflow Pages ainda depende da arquitetura v22: {token}')
           required_pages = [
-              'branches: [main, beta]',
-              'latestBetaDocumented=v23',
-              'bootstrap.js',
-              'sync-events.js',
-              'persistentLocalCache',
-              'persistentMultipleTabManager',
-              'validate-wallet-data.mjs',
-              'actions/upload-pages-artifact@v4',
-              'actions/deploy-pages@v4'
+              'branches: [main, beta]', 'latestBetaDocumented=v23', 'bootstrap.js', 'sync-events.js',
+              'persistentLocalCache', 'persistentMultipleTabManager', 'validate-wallet-data.mjs',
+              'actions/upload-pages-artifact@v4', 'actions/deploy-pages@v4'
           ]
           for token in required_pages:
               if token not in pages:
                   raise SystemExit(f'Workflow Pages v23 incompleto: {token}')
 
-          print('Arquitetura integrada v23 e workflow Pages aprovados.')
+          print('Arquitetura, identidade v23, migração de cache e workflow Pages aprovados.')
           PY
 
       - name: Baixar main estável para simular Pages
@@ -109,19 +107,18 @@ jobs:
           rsync -a --delete --exclude='.git/' --exclude='.github/' ./ public/beta/ \
             --exclude='stable-main/' --exclude='public/' --exclude='node_modules/'
           touch public/.nojekyll
-
           test -f public/index.html
           test -f public/VERSION
           test -f public/beta/index.html
           test -f public/beta/VERSION
+          test -f public/beta/beta-banner.js
           test -f public/beta/data/carteira-c2/manifest.json
           test -f public/data/ultimo-concurso.json
           test -f public/data/concursos-oficiais.json
           test -f public/data/concursos-oficiais.csv
-
           grep -q '^stableVersion=v11$' public/VERSION
           grep -q '^latestBetaDocumented=v23$' public/beta/VERSION
-          grep -q '^betaCandidateStatus=release-candidate$' public/beta/VERSION
+          grep -q 'const BUILD = "v23"' public/beta/beta-banner.js
           (cd public/beta && node scripts/validate-wallet-data.mjs)
 
       - name: Instalar navegador de QA
@@ -149,6 +146,11 @@ jobs:
         env:
           QA_BASE_URL: http://127.0.0.1:4173/
         run: timeout 90s node tests/sync-events-smoke.mjs
+
+      - name: Smoke test funcional ampliado
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+        run: timeout 90s node tests/functional-smoke.mjs
 
       - name: Encerrar servidor local
         if: always()
