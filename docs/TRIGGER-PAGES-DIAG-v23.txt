@@ -1,2 +1,3 @@
 Diagnóstico da política do ambiente github-pages após build v23 aprovado e deploy bloqueado.
 Coletar políticas de branch, anotações e status do deployment.
+Auditoria final após correção pelo workflow publicado na main.
