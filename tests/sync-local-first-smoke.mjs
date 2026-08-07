@@ -1,8 +1,10 @@
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 import assert from "node:assert/strict";
 
 const baseUrl = process.env.QA_BASE_URL || "http://127.0.0.1:4173/";
-const browser = await chromium.launch({ headless: true });
+const engineName = process.env.QA_BROWSER || "chromium";
+const engine = engineName === "webkit" ? webkit : chromium;
+const browser = await engine.launch({ headless: true });
 const context = await browser.newContext({ serviceWorkers: "block" });
 const page = await context.newPage();
 await page.route("https://www.gstatic.com/**", route => route.abort());
@@ -82,7 +84,7 @@ try {
   await page.waitForTimeout(1_850);
   assert.equal(await page.locator("#su-loto-cloud-root").getAttribute("data-sync-quiet"), "true", "Aviso de salvamento repetitivo deve recolher sem ficar preso na tela");
 
-  console.log(`Smoke aprovado: contador local-first respondeu em ${localLatency} ms; snapshot antigo foi bloqueado e aviso de nuvem recolheu.`);
+  console.log(`Smoke ${engineName} aprovado: contador local-first respondeu em ${localLatency} ms; snapshot antigo foi bloqueado e aviso de nuvem recolheu.`);
 } finally {
   await browser.close();
 }
