@@ -1,1 +1,2 @@
 Auditoria pública da SU Loto Beta v23 em 07/08/2026.
+Reexecução após ajuste para workflow_dispatch oficial com ref=beta.
