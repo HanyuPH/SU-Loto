@@ -60,26 +60,11 @@ O workflow `.github/workflows/update-lotofacil-result.yml` consulta a API oficia
 - `data/concursos-oficiais.json` - histórico operacional coletado pelo projeto;
 - `data/concursos-oficiais.csv` - exportação CSV sincronizada com o JSON.
 
-O CSV local antigo, encerrado no concurso 3721 e sem o concurso 3046, permanece apenas como arquivo histórico incompleto e não é fonte operacional vigente.
-
 O aplicativo verifica o arquivo mais recente ao abrir. Quando encontra um concurso ainda não registrado, mostra as dezenas oficiais e oferece **Registrar e conferir** sem preenchimento manual.
 
 ## Conta, privacidade e sincronização
 
-O aplicativo adota funcionamento **local-first**:
-
-- marcações e concursos são mantidos no `localStorage` para uso imediato e funcionamento offline;
-- o backup manual completo permanece disponível e não é substituído pela nuvem;
-- sem autenticação, os dados operacionais permanecem apenas no navegador utilizado.
-
-Quando o usuário entra com a mesma conta utilizada no Ecossistema SU:
-
-- a autenticação é processada pelo Firebase Authentication;
-- status dos jogos e concursos são sincronizados com o Cloud Firestore;
-- os dados são gravados na árvore privada `users/{uid}/suLoto/C2`;
-- listeners em tempo real atualizam os dispositivos conectados à mesma conta;
-- alterações feitas offline permanecem localmente até a reconexão;
-- a v23 usa cache persistente do Firestore com suporte a múltiplas abas quando disponível.
+O aplicativo adota funcionamento **local-first**. Com autenticação, status e concursos são sincronizados com o Cloud Firestore em `users/{uid}/suLoto/C2`; a v23 usa cache persistente do Firestore com suporte a múltiplas abas quando disponível.
 
 ## PWA e funcionamento offline
 
