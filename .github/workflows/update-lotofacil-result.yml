@@ -18,7 +18,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: atualizar-resultado-lotofacil
@@ -28,6 +28,10 @@ jobs:
   update-result:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      changed: ${{ steps.publish.outputs.changed }}
     steps:
       - name: Baixar repositório
         uses: actions/checkout@v4
@@ -45,13 +49,73 @@ jobs:
         run: node scripts/update-lotofacil-result.mjs
 
       - name: Publicar somente quando houver alteração
+        id: publish
         run: |
           if git diff --quiet -- data/ultimo-concurso.json data/concursos-oficiais.json data/concursos-oficiais.csv; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Nenhum resultado novo ou corrigido."
             exit 0
           fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/ultimo-concurso.json data/concursos-oficiais.json data/concursos-oficiais.csv
           git commit -m "Atualizar resultado oficial da Lotofácil"
           git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+  deploy-pages:
+    name: Publicar resultado atualizado no GitHub Pages
+    needs: update-result
+    if: needs.update-result.outputs.changed == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages-su-loto
+      cancel-in-progress: false
+    steps:
+      - name: Baixar versão estável atualizada
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: site-main
+
+      - name: Baixar versão Beta
+        uses: actions/checkout@v4
+        with:
+          ref: beta
+          path: site-beta
+
+      - name: Montar artefato único do Pages
+        run: |
+          rm -rf public
+          mkdir -p public
+          rsync -a --delete --exclude='.git/' --exclude='.github/' site-main/ public/
+          mkdir -p public/beta
+          rsync -a --delete --exclude='.git/' --exclude='.github/' site-beta/ public/beta/
+          touch public/.nojekyll
+
+          test -f public/data/ultimo-concurso.json
+          test -f public/data/concursos-oficiais.json
+          test -f public/data/concursos-oficiais.csv
+          test -f public/index.html
+          test -f public/beta/index.html
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Enviar artefato do Pages
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+
+      - name: Publicar GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
