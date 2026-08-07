@@ -18,7 +18,7 @@ concurrency:
 jobs:
   sync-local-first:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - name: Baixar correção Beta v23
         uses: actions/checkout@v4
@@ -54,10 +54,10 @@ jobs:
           grep -q 'stopImmediatePropagation' sync-local-first-guard.js
           grep -q 'Salvando na nuvem…' sync-local-first-guard.js
 
-      - name: Instalar Chromium de QA
+      - name: Instalar navegadores de QA
         run: |
           npm install --no-save playwright@1.55.0
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
 
       - name: Iniciar Beta localmente
         run: |
@@ -73,6 +73,13 @@ jobs:
       - name: Testar sincronização local-first em Chromium
         env:
           QA_BASE_URL: http://127.0.0.1:4173/
+          QA_BROWSER: chromium
+        run: timeout 90s node tests/sync-local-first-smoke.mjs
+
+      - name: Testar sincronização local-first em WebKit
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+          QA_BROWSER: webkit
         run: timeout 90s node tests/sync-local-first-smoke.mjs
 
       - name: Encerrar servidor
