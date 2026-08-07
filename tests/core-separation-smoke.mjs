@@ -6,19 +6,17 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ serviceWorkers: "allow" });
 const page = await context.newPage();
 
-// A nuvem não faz parte deste smoke test. O bootstrap deve manter os módulos locais
-// funcionando mesmo quando a dependência externa do Firebase não está disponível.
 await page.route("https://www.gstatic.com/**", route => route.abort());
 
 async function waitForWallet() {
   await page.waitForFunction(() => document.querySelectorAll(".game-card[data-id]").length === 300, null, { timeout: 30_000 });
 }
 
-async function waitForServiceWorker() {
+async function waitForServiceWorkerControl() {
   await page.waitForFunction(async () => {
     const registration = await navigator.serviceWorker.getRegistration();
-    return registration?.active?.state === "activated";
-  }, null, { timeout: 15_000 });
+    return registration?.active?.state === "activated" && Boolean(navigator.serviceWorker.controller);
+  }, null, { timeout: 20_000 });
 }
 
 try {
@@ -59,7 +57,7 @@ try {
   await waitForWallet();
   assert.equal(await page.locator('.game-card[data-id="43"]').getAttribute("data-status"), "apostado", "Estado operacional deve sobreviver ao reload");
 
-  await waitForServiceWorker();
+  await waitForServiceWorkerControl();
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForWallet();
@@ -67,11 +65,13 @@ try {
   const offline = await page.evaluate(() => ({
     count: document.querySelectorAll(".game-card[data-id]").length,
     game43: document.querySelector('.game-card[data-id="43"]')?.dataset.status,
-    wallet: globalThis.SU_LOTO_WALLET_MANIFEST?.wallet
+    wallet: globalThis.SU_LOTO_WALLET_MANIFEST?.wallet,
+    controlled: Boolean(navigator.serviceWorker.controller)
   }));
   assert.equal(offline.count, 300, "A carteira deve abrir completa offline");
   assert.equal(offline.game43, "apostado", "Estado operacional deve permanecer disponível offline");
   assert.equal(offline.wallet, "SU Loto - C2", "Manifesto oficial deve permanecer disponível offline");
+  assert.equal(offline.controlled, true, "A página offline deve permanecer controlada pelo Service Worker");
 
   console.log("Smoke test aprovado: 300 jogos, estado separado, persistência e PWA offline funcionando.");
 } finally {
