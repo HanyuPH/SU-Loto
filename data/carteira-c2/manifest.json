@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "project": "SU Loto",
+  "wallet": "SU Loto - C2",
+  "source": {
+    "file": "SU Loto - C2.xlsx",
+    "spreadsheetInternalVersion": "v2.2",
+    "spreadsheetSha256": "4e74e633bc8782aa9c3849f889d256baf698bb42f4cbb2b91b6519d532628764",
+    "registeredWalletLogicalSha256": "f0b2f643ed525d0db2591e9dfbc53758fdc980bb891fdeb61740f077633c758a"
+  },
+  "rules": {
+    "gameCount": 300,
+    "numbersPerGame": 15,
+    "minNumber": 1,
+    "maxNumber": 25,
+    "canonicalIds": "001-300",
+    "basePreserved": "001-100",
+    "universalSystem": "101-300"
+  },
+  "shards": [
+    {"file":"games-001-050.json","fromId":1,"toId":50,"games":50},
+    {"file":"games-051-100.json","fromId":51,"toId":100,"games":50},
+    {"file":"games-101-150.json","fromId":101,"toId":150,"games":50},
+    {"file":"games-151-200.json","fromId":151,"toId":200,"games":50},
+    {"file":"games-201-250.json","fromId":201,"toId":250,"games":50},
+    {"file":"games-251-300.json","fromId":251,"toId":300,"games":50}
+  ],
+  "operationalState": "not-part-of-wallet"
+}
