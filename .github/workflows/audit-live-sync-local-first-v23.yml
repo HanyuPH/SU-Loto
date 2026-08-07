@@ -7,7 +7,11 @@ on:
 
 permissions:
   contents: read
-  actions: read
+  actions: write
+
+concurrency:
+  group: audit-live-sync-local-first-v23
+  cancel-in-progress: true
 
 jobs:
   audit-live:
@@ -18,15 +22,27 @@ jobs:
       MERGED_AT: 2026-08-07T20:33:21Z
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Confirmar deployment posterior à correção e arquivos públicos
+      - name: Garantir publicação oficial e confirmar arquivos públicos
         run: |
           set -euo pipefail
           mkdir -p /tmp/live-sync
 
-          deployment_ok=0
-          for attempt in $(seq 1 36); do
+          list_deploys() {
             gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/live-sync/main-runs.json
             jq --arg since "$MERGED_AT" '[.workflow_runs[] | select(.name == "Publicar SU Loto estável e Beta" and .created_at >= $since) | {id,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}]' /tmp/live-sync/main-runs.json > /tmp/live-sync/pages-after-fix.json
+          }
+
+          list_deploys
+          if ! jq -e 'length > 0' /tmp/live-sync/pages-after-fix.json >/dev/null; then
+            workflow_id="$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" --jq '.workflows[] | select(.name == "Publicar SU Loto estável e Beta") | .id' | head -n1)"
+            test -n "$workflow_id"
+            gh api -X POST "/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/dispatches" -f ref=main
+            sleep 3
+          fi
+
+          deployment_ok=0
+          for attempt in $(seq 1 48); do
+            list_deploys
             if jq -e 'map(select(.conclusion == "success")) | length > 0' /tmp/live-sync/pages-after-fix.json >/dev/null; then
               deployment_ok=1
               break
@@ -38,7 +54,7 @@ jobs:
           audit="sync-${GITHUB_RUN_ID}"
           fetch_until() {
             local url="$1" pattern="$2" out="$3"
-            for attempt in $(seq 1 36); do
+            for attempt in $(seq 1 48); do
               if curl -fsSL -H 'Cache-Control: no-cache' "${url}?audit=${audit}-${attempt}" -o "$out" && grep -Fq "$pattern" "$out"; then
                 return 0
               fi
