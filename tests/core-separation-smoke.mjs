@@ -14,6 +14,13 @@ async function waitForWallet() {
   await page.waitForFunction(() => document.querySelectorAll(".game-card[data-id]").length === 300, null, { timeout: 30_000 });
 }
 
+async function waitForServiceWorker() {
+  await page.waitForFunction(async () => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    return registration?.active?.state === "activated";
+  }, null, { timeout: 15_000 });
+}
+
 try {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await waitForWallet();
@@ -52,7 +59,7 @@ try {
   await waitForWallet();
   assert.equal(await page.locator('.game-card[data-id="43"]').getAttribute("data-status"), "apostado", "Estado operacional deve sobreviver ao reload");
 
-  await page.evaluate(() => navigator.serviceWorker.ready.then(registration => Boolean(registration.active)));
+  await waitForServiceWorker();
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForWallet();
