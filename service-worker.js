@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-v23-sync-v1";
+const CACHE = "su-loto-c2-v23-sync-v2";
 
 const PRECACHE = [
   "./",
@@ -11,6 +11,7 @@ const PRECACHE = [
   "./app.js",
   "./contests.js",
   "./official-results.js",
+  "./beta-banner.js",
   "./beta-layout-review.js",
   "./cloud-sync.js",
   "./ecosystem-ui.js",
@@ -47,6 +48,7 @@ self.addEventListener("activate", event => {
         .filter(key => (
           key.startsWith("stable-su-loto-c2-") ||
           key.startsWith("su-loto-c2-stable-") ||
+          key.startsWith("su-loto-c2-beta-") ||
           key.startsWith("su-loto-c2-v23-")
         ) && key !== CACHE)
         .map(key => caches.delete(key))
@@ -78,14 +80,11 @@ async function networkFirst(request, { navigation = false } = {}) {
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
-
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-
   if (event.request.mode === "navigate") {
     event.respondWith(networkFirst(event.request, { navigation: true }));
     return;
   }
-
   event.respondWith(networkFirst(event.request));
 });
