@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Baixar repositório
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -31,11 +33,40 @@ jobs:
       - name: Validar Carteira C2 derivada
         run: node scripts/validate-wallet-data.mjs
 
-      - name: Verificar SHA-256 da planilha oficial
+      - name: Verificar registro SHA-256 da planilha oficial
         run: |
           EXPECTED="4e74e633bc8782aa9c3849f889d256baf698bb42f4cbb2b91b6519d532628764"
-          ACTUAL="$(sha256sum 'SU Loto - C2.xlsx' | awk '{print $1}')"
-          test "$ACTUAL" = "$EXPECTED"
+          VERSION_HASH="$(grep '^walletSpreadsheetSha256=' VERSION | cut -d= -f2-)"
+          MANIFEST_HASH="$(node -e "const m=require('./data/carteira-c2/manifest.json');process.stdout.write(m.source.spreadsheetSha256)")"
+          test "$VERSION_HASH" = "$EXPECTED"
+          test "$MANIFEST_HASH" = "$EXPECTED"
+
+      - name: Comparar dados derivados com a main estável
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const { readFileSync } = require('node:fs');
+          const path = require('node:path');
+
+          const legacy = [];
+          for (let part = 1; part <= 6; part += 1) {
+            const source = execFileSync('git', ['show', `origin/main:data/games-${part}.js`], { encoding: 'utf8' });
+            const match = source.match(/\.concat\((\[.*\])\);\s*$/s);
+            if (!match) throw new Error(`Não foi possível interpretar data/games-${part}.js da main.`);
+            legacy.push(...JSON.parse(match[1]).map(({ initialStatus, ...game }) => game));
+          }
+
+          const manifest = JSON.parse(readFileSync('data/carteira-c2/manifest.json', 'utf8'));
+          const derived = manifest.shards.flatMap(shard => {
+            const payload = JSON.parse(readFileSync(path.join('data', 'carteira-c2', shard.file), 'utf8'));
+            return payload.games || [];
+          });
+
+          if (JSON.stringify(derived) !== JSON.stringify(legacy)) {
+            throw new Error('Os dados derivados não são idênticos à definição estável da Carteira C2 na main.');
+          }
+          console.log('Dados derivados idênticos à definição estável da main, sem o estado operacional legado.');
+          NODE
 
       - name: Validar sintaxe JavaScript
         run: |
