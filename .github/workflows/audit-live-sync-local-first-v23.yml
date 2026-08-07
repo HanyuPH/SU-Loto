@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  actions: write
+  actions: read
 
 concurrency:
   group: audit-live-sync-local-first-v23
@@ -16,43 +16,19 @@ concurrency:
 jobs:
   audit-live:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 2
     env:
-      BASE: https://hanyuph.github.io/SU-Loto/beta
-      MERGED_AT: 2026-08-07T20:33:21Z
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Diagnosticar deployment e conteúdo público
+      - name: Identificar workflow oficial e confirmar correção live
         run: |
-          set -u
-          gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/main-runs.json
-          jq --arg since "$MERGED_AT" '[.workflow_runs[] | select(.name == "Publicar SU Loto estável e Beta" and .created_at >= $since) | {id,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}]' /tmp/main-runs.json | tee /tmp/pages-after-fix.json
-
-          if ! jq -e 'length > 0' /tmp/pages-after-fix.json >/dev/null; then
-            workflow_id="$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" --jq '.workflows[] | select(.name == "Publicar SU Loto estável e Beta") | .id' | head -n1)"
-            echo "Nenhum deploy posterior ao merge. Workflow oficial: $workflow_id"
-            if [ -n "$workflow_id" ]; then
-              gh api -X POST "/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/dispatches" -f ref=main
-              echo "Publicação oficial acionada agora."
-            fi
-          fi
-
-          audit="diag-${GITHUB_RUN_ID}"
-          for spec in \
-            "bootstrap.js|sync-local-first-guard.js?v=1" \
-            "bootstrap.js|cloud-sync.js?v=2" \
-            "sync-local-first-guard.js|stopImmediatePropagation" \
-            "sync-local-first-guard.js|Salvando na nuvem…" \
-            "service-worker.js|su-loto-c2-v23-sync-v3" \
-            "service-worker.js|\"./sync-local-first-guard.js\"" \
-            "VERSION|latestBetaDocumented=v23"; do
-            file="${spec%%|*}"
-            pattern="${spec#*|}"
-            out="/tmp/$(echo "$file" | tr '/' '_')"
-            code="$(curl -L -sS -o "$out" -w '%{http_code}' -H 'Cache-Control: no-cache' "$BASE/$file?audit=$audit" || true)"
-            if grep -Fq "$pattern" "$out" 2>/dev/null; then
-              echo "LIVE_OK $file :: $pattern :: HTTP $code"
-            else
-              echo "LIVE_PENDING $file :: $pattern :: HTTP $code"
-            fi
-          done
+          set -euo pipefail
+          gh api "/repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" \
+            --jq '.workflows[] | select(.name == "Publicar SU Loto estável e Beta") | {id,name,path,state}'
+          curl -fsSL -H 'Cache-Control: no-cache' \
+            "https://hanyuph.github.io/SU-Loto/beta/service-worker.js?audit=${GITHUB_RUN_ID}" \
+            | grep -F 'su-loto-c2-v23-sync-v3'
+          curl -fsSL -H 'Cache-Control: no-cache' \
+            "https://hanyuph.github.io/SU-Loto/beta/sync-local-first-guard.js?audit=${GITHUB_RUN_ID}" \
+            | grep -F 'stopImmediatePropagation'
+          echo 'LIVE_OK: correção local-first publicada.'
