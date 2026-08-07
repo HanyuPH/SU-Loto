@@ -137,7 +137,7 @@ jobs:
           fetch_until "$LOTO_BASE/beta/beta-banner.js" 'const BUILD = "v23"' /tmp/loto-banner.js
           fetch_until "$LOTO_BASE/beta/VERSION" 'latestBetaDocumented=v23' /tmp/loto-version.txt
           fetch_until "$LOTO_BASE/beta/bootstrap.js" 'beta-banner.js?v=23' /tmp/loto-bootstrap.js
-          fetch_until "$LOTO_BASE/beta/service-worker.js" 'su-loto-c2-v23-sync-v2' /tmp/loto-sw.js
+          fetch_until "$LOTO_BASE/beta/service-worker.js" 'su-loto-c2-v23-sync-v3' /tmp/loto-sw.js
           fetch_until "$LOTO_BASE/beta/index.html" 'src="bootstrap.js"' /tmp/loto-index.html
           fetch_until "$LOTO_BASE/service-worker.js" 'stable-su-loto-c2-v11' /tmp/loto-stable-sw.js
 
