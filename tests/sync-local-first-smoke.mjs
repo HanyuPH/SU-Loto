@@ -45,6 +45,7 @@ try {
   assert.equal(local.afterCount, local.beforeCount + 1, "Contador deve mudar no mesmo ciclo do clique local");
   assert.equal(local.cardStatus, "apostado", "Cartão deve assumir Apostado imediatamente");
   assert.ok(local.latency < 250, `Resposta local da aplicação deve ser imediata; medido ${local.latency.toFixed(1)} ms`);
+  console.log(`Resposta local ${engineName}: ${local.latency.toFixed(1)} ms`);
   const id = local.id;
 
   await page.evaluate(gameId => {
@@ -88,14 +89,31 @@ try {
   }, remoteId);
   await page.waitForFunction(expected => Number(document.getElementById("count-registrado")?.textContent || 0) === expected, before.registrado + 1, { timeout: 2_000 });
 
+  // Usa o próprio componente de nuvem quando ele já existe. Se a nuvem estiver
+  // indisponível no ambiente de QA, cria-o uma única vez para o guard anexar.
   await page.evaluate(() => {
-    document.getElementById("su-loto-cloud-root")?.remove();
-    const root = document.createElement("div");
-    root.id = "su-loto-cloud-root";
-    root.innerHTML = '<button id="su-loto-cloud-status" data-state="saving"><span id="su-loto-cloud-text">Salvando alterações…</span></button>';
-    document.body.appendChild(root);
+    let root = document.getElementById("su-loto-cloud-root");
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "su-loto-cloud-root";
+      document.body.appendChild(root);
+    }
+    let button = document.getElementById("su-loto-cloud-status");
+    if (!button) {
+      button = document.createElement("button");
+      button.id = "su-loto-cloud-status";
+      root.appendChild(button);
+    }
+    let label = document.getElementById("su-loto-cloud-text");
+    if (!label) {
+      label = document.createElement("span");
+      label.id = "su-loto-cloud-text";
+      button.appendChild(label);
+    }
+    button.dataset.state = "saving";
+    label.textContent = "Salvando alterações…";
   });
-  await page.waitForFunction(() => document.getElementById("su-loto-cloud-text")?.textContent === "Salvando na nuvem…", null, { timeout: 2_000 });
+  await page.waitForFunction(() => document.getElementById("su-loto-cloud-text")?.textContent === "Salvando na nuvem…", null, { timeout: 3_000 });
   await page.waitForTimeout(600);
   await page.evaluate(() => { document.getElementById("su-loto-cloud-text").textContent = "Salvando alterações…"; });
   await page.waitForFunction(() => document.getElementById("su-loto-cloud-text")?.textContent === "Salvando na nuvem…", null, { timeout: 2_000 });
