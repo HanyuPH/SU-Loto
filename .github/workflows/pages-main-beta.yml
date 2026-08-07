@@ -11,8 +11,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: github-pages-su-loto
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -33,50 +33,49 @@ jobs:
 
       - name: Montar e validar site
         run: |
+          rm -rf public
           mkdir -p public/beta
-          rsync -a --exclude='.git' --exclude='.github' stable/ public/
-          rsync -a --exclude='.git' --exclude='.github' beta-source/ public/beta/
+          rsync -a --exclude='.git/' --exclude='.github/' stable/ public/
+          rsync -a --exclude='.git/' --exclude='.github/' beta-source/ public/beta/
           touch public/.nojekyll public/beta/.nojekyll
 
-          # Estável preservada
+          # Estável preservada em /
           test -f public/index.html
-          grep -q 'stable-su-loto-c2-v11' public/service-worker.js
-          ! grep -q 'beta-banner.js' public/service-worker.js
+          test -f public/VERSION
+          grep -q '^stableVersion=v11$' public/VERSION
           node --check public/app.js
           node --check public/service-worker.js
 
-          # Beta v22
-          for file in index.html app.js service-worker.js official-results.js realtime-cloud.js contest-bets.js contest-bets-cloud.js contest-lock.js contest-session.js contest-selection-ui.js beta-banner.js; do
+          # Beta v23 consolidada em /beta/
+          for file in index.html bootstrap.js sync-events.js app.js service-worker.js official-results.js cloud-sync.js contest-bets.js contest-bets-cloud.js VERSION; do
             test -f "public/beta/$file"
           done
-          grep -q 'const BUILD = "v22"' public/beta/beta-banner.js
-          grep -q 'su-loto-c2-beta-v22' public/beta/service-worker.js
-          grep -q "beta-banner.js?v=22" public/beta/service-worker.js
-          grep -q 'const localModules' public/beta/service-worker.js
-          grep -q 'const cloudModules' public/beta/service-worker.js
-          grep -q 'Promise.allSettled' public/beta/service-worker.js
-          grep -q 'cachedIgnoringVersion' public/beta/service-worker.js
-          grep -q 'ignoreSearch: true' public/beta/service-worker.js
-          grep -q 'contest-bets.js?v=4' public/beta/service-worker.js
-          grep -q 'contest-session.js?v=2' public/beta/service-worker.js
-          grep -q 'contest-selection-ui.js?v=2' public/beta/service-worker.js
-          grep -q 'realtime-cloud.js?v=2' public/beta/service-worker.js
-          grep -q 'contest-bets-cloud.js?v=4' public/beta/service-worker.js
-          grep -q 'persistentMultipleTabManager' public/beta/realtime-cloud.js
-          grep -q 'Sincronizado em tempo real' public/beta/realtime-cloud.js
-          grep -q 'selectionUiV2' public/beta/contest-selection-ui.js
-          grep -q 'contest-selected-badge' public/beta/contest-selection-ui.js
-          grep -q 'Reabrir concurso' public/beta/contest-session.js
-          grep -q 'Resultado publicado • bloqueado' public/beta/contest-lock.js
-          for file in app.js service-worker.js official-results.js realtime-cloud.js contest-bets.js contest-bets-cloud.js contest-lock.js contest-session.js contest-selection-ui.js; do
+          test -f public/beta/data/carteira-c2/manifest.json
+          test -f public/beta/data/carteira-c2/games-001-050.json
+          test -f public/beta/data/carteira-c2/games-251-300.json
+          grep -q '^latestBetaDocumented=v23$' public/beta/VERSION
+          grep -q '^walletGames=300$' public/beta/VERSION
+          grep -q 'src="bootstrap.js"' public/beta/index.html
+          grep -q 'persistentLocalCache' public/beta/cloud-sync.js
+          grep -q 'persistentMultipleTabManager' public/beta/cloud-sync.js
+          grep -q 'su:state-change' public/beta/sync-events.js
+          ! grep -q 'Storage.prototype.setItem' public/beta/cloud-sync.js
+          ! grep -q 'Storage.prototype.setItem' public/beta/contest-bets-cloud.js
+          ! grep -q 'response.text(' public/beta/service-worker.js
+          ! grep -q 'new Response(' public/beta/service-worker.js
+          for legacy in data/games-1.js data/games-2.js data/games-3.js data/games-4.js data/games-5.js data/games-6.js; do
+            test ! -e "public/beta/$legacy"
+          done
+          for file in bootstrap.js sync-events.js app.js service-worker.js official-results.js cloud-sync.js contest-bets.js contest-bets-cloud.js; do
             node --check "public/beta/$file"
           done
+          (cd public/beta && node scripts/validate-wallet-data.mjs)
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
 
       - name: Enviar artefato
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: public
 
@@ -91,3 +90,62 @@ jobs:
       - name: Publicar no GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify-live:
+    name: Verificar publicação real do Ecossistema SU
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: write
+    env:
+      LOTO_BASE: https://hanyuph.github.io/SU-Loto
+      MEGA_BASE: https://hanyuph.github.io/SU-Mega
+    steps:
+      - name: Conferir SU Loto v23 e SU Mega v29 no Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          audit="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          fetch_until() {
+            local url="$1"
+            local pattern="$2"
+            local output="$3"
+            local attempt
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --show-error --location \
+                --header 'Cache-Control: no-cache' \
+                "${url}?audit=${audit}-${attempt}" -o "$output" \
+                && grep -Fq "$pattern" "$output"; then
+                echo "OK: $url contém $pattern"
+                return 0
+              fi
+              sleep 5
+            done
+            echo "FALHA: $url não apresentou $pattern após as tentativas." >&2
+            if test -f "$output"; then
+              echo '--- conteúdo recebido ---' >&2
+              head -c 1200 "$output" >&2 || true
+              echo >&2
+            fi
+            return 1
+          }
+
+          fetch_until "$LOTO_BASE/beta/beta-banner.js" 'const BUILD = "v23"' /tmp/loto-banner.js
+          fetch_until "$LOTO_BASE/beta/VERSION" 'latestBetaDocumented=v23' /tmp/loto-version.txt
+          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'beta-banner.js?v=23' /tmp/loto-bootstrap.js
+          fetch_until "$LOTO_BASE/beta/service-worker.js" 'su-loto-c2-v23-sync-v2' /tmp/loto-sw.js
+          fetch_until "$LOTO_BASE/beta/index.html" 'src="bootstrap.js"' /tmp/loto-index.html
+          fetch_until "$LOTO_BASE/service-worker.js" 'stable-su-loto-c2-v11' /tmp/loto-stable-sw.js
+
+          fetch_until "$MEGA_BASE/beta/beta-banner.js" 'const BUILD = "v29"' /tmp/mega-banner.js
+          fetch_until "$MEGA_BASE/beta/service-worker.js" 'su-mega-c2-beta-v29' /tmp/mega-sw.js
+
+          gh api --method POST \
+            "/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state=success \
+            -f context='pages-live-audit' \
+            -f description='SU Loto Beta v23 e SU Mega Beta v29 confirmadas no Pages'
