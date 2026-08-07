@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const BUILD = "v11";
+  const BUILD = "v23";
 
   function init() {
     let bar = document.getElementById("su-beta-banner");
@@ -14,9 +14,6 @@
     document.documentElement.dataset.suLotoBetaBuild = BUILD;
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init, { once: true });
-  } else {
-    init();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
+  else init();
 })();
