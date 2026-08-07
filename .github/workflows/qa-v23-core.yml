@@ -18,7 +18,7 @@ concurrency:
 jobs:
   core-separation:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Baixar repositório
         uses: actions/checkout@v4
@@ -70,7 +70,7 @@ jobs:
 
       - name: Validar sintaxe JavaScript
         run: |
-          for file in bootstrap.js app.js contests.js official-results.js service-worker.js cloud-sync.js ecosystem-ui.js ecosystem-backup.js prize-analysis.js contest-bets.js contest-bets-cloud.js contest-lock.js contest-session.js beta-layout-review.js; do
+          for file in bootstrap.js app.js contests.js official-results.js service-worker.js cloud-sync.js ecosystem-ui.js ecosystem-backup.js prize-analysis.js contest-bets.js contest-bets-cloud.js contest-lock.js contest-session.js beta-layout-review.js tests/core-separation-smoke.mjs; do
             node --check "$file"
           done
 
@@ -118,3 +118,23 @@ jobs:
 
           print('Arquitetura v23 validada: carteira, shell e Service Worker separados.')
           PY
+
+      - name: Instalar navegador do smoke test
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Iniciar aplicativo local
+        run: |
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/su-loto-v23-server.log 2>&1 &
+          for attempt in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/su-loto-v23-server.log
+          exit 1
+
+      - name: Testar aplicação e PWA offline
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+        run: node tests/core-separation-smoke.mjs
