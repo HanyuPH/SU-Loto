@@ -4,12 +4,15 @@ on:
   push:
     branches:
       - agent/su-loto-v23-contest-selection-fix
+  pull_request:
+    branches:
+      - beta
 
 permissions:
   contents: read
 
 concurrency:
-  group: qa-v23-contest-selection-fix
+  group: qa-v23-contest-selection-fix-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
