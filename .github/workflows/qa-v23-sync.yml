@@ -1,0 +1,103 @@
+name: Validar consolidação de sincronização SU Loto v23
+
+on:
+  push:
+    branches:
+      - agent/su-loto-v23-sync-consolidation
+  pull_request:
+    branches:
+      - agent/su-loto-v23-core-separation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-v23-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync-consolidation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validar Carteira C2 derivada
+        run: node scripts/validate-wallet-data.mjs
+
+      - name: Validar sintaxe JavaScript
+        run: |
+          for file in bootstrap.js sync-events.js cloud-sync.js contest-bets-cloud.js service-worker.js app.js contests.js official-results.js contest-bets.js; do
+            node --check "$file"
+          done
+
+      - name: Auditar arquitetura de sincronização
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          cloud = Path('cloud-sync.js').read_text(encoding='utf-8')
+          bets = Path('contest-bets-cloud.js').read_text(encoding='utf-8')
+          events = Path('sync-events.js').read_text(encoding='utf-8')
+          bootstrap = Path('bootstrap.js').read_text(encoding='utf-8')
+          sw = Path('service-worker.js').read_text(encoding='utf-8')
+
+          for name, source in [('cloud-sync.js', cloud), ('contest-bets-cloud.js', bets)]:
+              if 'Storage.prototype.setItem' in source:
+                  raise SystemExit(f'{name} ainda intercepta Storage.prototype.setItem')
+
+          required_cloud = [
+              'persistentLocalCache',
+              'persistentMultipleTabManager',
+              'onSnapshot',
+              'batch.delete',
+              'SULotoSyncEvents'
+          ]
+          for token in required_cloud:
+              if token not in cloud:
+                  raise SystemExit(f'cloud-sync.js não contém requisito: {token}')
+
+          if 'su:state-change' not in events or 'contestBets' not in events:
+              raise SystemExit('Barramento central de sincronização incompleto')
+          if 'Storage.prototype' in events:
+              raise SystemExit('sync-events.js não pode interceptar Storage.prototype')
+
+          sync_pos = bootstrap.find('import("./sync-events.js")')
+          cloud_pos = bootstrap.find('import("./cloud-sync.js")')
+          if sync_pos < 0 or cloud_pos < 0 or sync_pos > cloud_pos:
+              raise SystemExit('sync-events.js deve carregar antes de cloud-sync.js')
+
+          if './sync-events.js' not in sw:
+              raise SystemExit('Service Worker não pré-carrega sync-events.js')
+
+          print('Arquitetura de sincronização validada sem interceptação global de Storage.')
+          PY
+
+      - name: Instalar navegador do smoke test
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Iniciar aplicativo local
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/su-loto-sync-server.log 2>&1 &
+          echo $! > /tmp/su-loto-sync-server.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/su-loto-sync-server.log
+          exit 1
+
+      - name: Testar eventos e funcionamento offline
+        env:
+          QA_BASE_URL: http://127.0.0.1:4173/
+        run: timeout 90s node tests/sync-events-smoke.mjs
