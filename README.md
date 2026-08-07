@@ -6,8 +6,10 @@ Aplicativo web oficial derivado da carteira **SU Loto - C2**.
 
 - versão estável do aplicativo: **v11**;
 - branch estável: `main`;
-- beta mais recente documentada: **v22** (`5e0310d59d57c3e20a8eac1a6fe1d0c26257845d`);
-- branch Beta ativa: `beta`;
+- candidata Beta consolidada: **v23 RC1**;
+- branch candidata: `release/beta-v23-rc1`;
+- branch Beta operacional: `beta`;
+- Beta v22 histórica preservada em `archive/beta-v22-20260807` no SHA `6b784eae38b3e35a91bd70b4899aebc8b9567820`;
 - arquivo de registro: `VERSION`.
 
 A expressão **v2.2** existente na planilha identifica somente a versão interna da composição e do plano da carteira. Ela não substitui a versão do aplicativo v11, a Constituição v1.0.1 nem a identificação da carteira C2.
@@ -29,6 +31,17 @@ A expressão **v2.2** existente na planilha identifica somente a versão interna
 A planilha oficial continua sendo a fonte dos 300 jogos. O aplicativo é uma interface operacional derivada para consulta, marcações e conferência.
 
 A classificação dos arquivos oficiais, históricos e substituídos está registrada em `docs/REGISTRO-ARQUIVOS-OFICIAIS.md`.
+
+## Arquitetura de dados da v23
+
+A Carteira C2 e o estado operacional são camadas separadas:
+
+- `data/carteira-c2/` contém somente os dados derivados e imutáveis dos 300 jogos;
+- marcações operacionais permanecem fora da definição dos jogos;
+- `data/migrations/v11-operational-seed.json` preserva apenas a migração do estado operacional legado;
+- `bootstrap.js` valida e carrega a Carteira antes dos módulos da aplicação;
+- `sync-events.js` centraliza notificações de alterações operacionais;
+- o Service Worker cuida de cache, atualização e funcionamento offline, sem transformar ou injetar JavaScript.
 
 ## Níveis oficiais de orçamento
 
@@ -57,6 +70,8 @@ O workflow `.github/workflows/update-lotofacil-result.yml` consulta a API oficia
 - `data/ultimo-concurso.json` - resultado oficial mais recente;
 - `data/concursos-oficiais.json` - histórico operacional coletado pelo projeto;
 - `data/concursos-oficiais.csv` - exportação CSV sincronizada com o JSON.
+
+Quando ocorre alteração real nos resultados, o mesmo workflow encadeia a publicação do GitHub Pages depois do commit, evitando que o repositório seja atualizado e a versão publicada permaneça defasada.
 
 O CSV local antigo, encerrado no concurso 3721 e sem o concurso 3046, permanece apenas como arquivo histórico incompleto e não é fonte operacional vigente.
 
@@ -89,7 +104,9 @@ Quando o usuário entra com a mesma conta utilizada no Ecossistema SU:
 - os dados são gravados na árvore privada `users/{uid}/suLoto/C2`;
 - o aplicativo registra identificadores e nomes de dispositivos para apoiar a sincronização;
 - listeners em tempo real atualizam os dispositivos conectados à mesma conta;
-- alterações feitas offline permanecem localmente até a reconexão.
+- o Firestore utiliza cache persistente e gerenciamento de múltiplas abas quando disponível;
+- alterações feitas offline permanecem localmente até a reconexão;
+- alterações operacionais são comunicadas pelo barramento `sync-events.js`, sem interceptação global de `Storage.prototype.setItem`.
 
 As regras do Firestore autorizam leitura e gravação somente ao usuário autenticado cujo `uid` corresponda ao caminho acessado. O aplicativo não envia a carteira oficial nem apostas para serviços publicitários. Credenciais não são armazenadas pelo código do aplicativo.
 
@@ -120,6 +137,13 @@ O encerramento administrativo da Constituição v1.0.1 foi concluído em 06/08/2
 
 O projeto opera em **manutenção oficial**. Melhorias visuais e operacionais podem seguir o fluxo Beta -> testes -> validação -> main, desde que não alterem a Carteira C2 ou regras constitucionais sem emenda formal.
 
+A v23 é uma consolidação técnica da plataforma e **não cria uma nova carteira**: a Carteira Oficial continua sendo a C2.
+
 ## Publicação
 
-O GitHub Pages utiliza a branch `main` e a pasta `/(root)`.
+O GitHub Pages publica um artefato único com duas linhas:
+
+- `/` → versão estável da branch `main`;
+- `/beta/` → versão de testes da branch `beta`.
+
+A promoção da v23 para a branch `beta` somente deve ocorrer após aprovação integral do QA integrado. A promoção futura para `main` continua sujeita aos testes em dispositivos, validação e governança aplicável.
