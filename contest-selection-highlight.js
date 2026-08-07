@@ -20,6 +20,18 @@
     document.head.appendChild(style);
   }
 
+  function applyVisualFallback(button, active) {
+    if (active) {
+      button.style.setProperty("border", "2px solid #7b2b91", "important");
+      button.style.setProperty("background", "#f7edf9", "important");
+      button.style.setProperty("box-shadow", "0 0 0 4px rgba(123,43,145,.28)", "important");
+    } else {
+      button.style.removeProperty("border");
+      button.style.removeProperty("background");
+      button.style.removeProperty("box-shadow");
+    }
+  }
+
   function refresh() {
     const root = document.getElementById(ROOT_ID);
     const number = document.getElementById(NUMBER_ID);
@@ -35,6 +47,7 @@
       button.classList.toggle("is-selected", active);
       button.toggleAttribute("data-selected", active);
       button.setAttribute("aria-pressed", String(active));
+      applyVisualFallback(button, active);
       if (active) {
         button.setAttribute("aria-current", "true");
         matched = true;
