@@ -113,14 +113,40 @@ try {
     button.dataset.state = "saving";
     label.textContent = "Salvando alterações…";
   });
-  await page.waitForFunction(() => document.getElementById("su-loto-cloud-text")?.textContent === "Salvando na nuvem…", null, { timeout: 3_000 });
-  await page.waitForTimeout(600);
-  await page.evaluate(() => { document.getElementById("su-loto-cloud-text").textContent = "Salvando alterações…"; });
-  await page.waitForFunction(() => document.getElementById("su-loto-cloud-text")?.textContent === "Salvando na nuvem…", null, { timeout: 2_000 });
-  await page.waitForTimeout(1_850);
-  assert.equal(await page.locator("#su-loto-cloud-root").getAttribute("data-sync-quiet"), "true", "Aviso de salvamento repetitivo deve recolher sem ficar preso na tela");
 
-  console.log(`Smoke ${engineName} aprovado: resposta local ${local.latency.toFixed(1)} ms; snapshot antigo bloqueado; alteração remota aceita; aviso de nuvem recolheu.`);
+  await page.waitForFunction(
+    () => document.getElementById("su-loto-cloud-root")?.dataset.syncQuiet === "true",
+    null,
+    { timeout: 3_000 }
+  );
+
+  // Simula exatamente a disputa visual observada no iPhone: outro caminho
+  // volta a escrever a frase antiga enquanto a sincronização segue em fundo.
+  // O indicador deve permanecer compacto em vez de voltar a ocupar a tela.
+  await page.evaluate(() => {
+    document.getElementById("su-loto-cloud-text").textContent = "Salvando alterações…";
+  });
+  await page.waitForTimeout(250);
+  assert.equal(
+    await page.locator("#su-loto-cloud-root").getAttribute("data-sync-quiet"),
+    "true",
+    "Alternância de mensagens de salvamento não pode reexpandir o indicador"
+  );
+
+  await page.evaluate(() => {
+    const button = document.getElementById("su-loto-cloud-status");
+    const label = document.getElementById("su-loto-cloud-text");
+    button.dataset.state = "synced";
+    label.textContent = "Sincronizado em tempo real";
+  });
+  await page.waitForTimeout(100);
+  assert.equal(
+    await page.locator("#su-loto-cloud-root").getAttribute("data-sync-quiet"),
+    "true",
+    "Estado sincronizado normal deve permanecer compacto"
+  );
+
+  console.log(`Smoke ${engineName} aprovado: resposta local ${local.latency.toFixed(1)} ms; snapshot antigo bloqueado; alteração remota aceita; indicador de fundo permaneceu compacto.`);
 } finally {
   await browser.close();
 }
