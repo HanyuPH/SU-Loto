@@ -105,6 +105,7 @@ async function loadApplication() {
     .then(() => import("./contest-bets.js?v=4"))
     .then(() => import("./contest-lock.js?v=1"))
     .then(() => import("./contest-session.js?v=1"))
+    .then(() => import("./contest-selection-highlight.js?v=1"))
     .catch(error => console.error("SU Loto módulos locais:", error));
 
   const cloudModules = import("./cloud-sync.js")
