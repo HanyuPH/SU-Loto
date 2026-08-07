@@ -36,7 +36,9 @@ try {
   await page.waitForFunction(() => document.querySelectorAll(".game-card[data-id]").length === 300, null, { timeout: 30_000 });
   await page.waitForFunction(() => Boolean(globalThis.SULotoContests), null, { timeout: 10_000 });
 
-  await page.waitForFunction(() => document.querySelector("#official-preview-title")?.textContent?.includes("99992"), null, { timeout: 10_000 });
+  await page.waitForSelector("#official-refresh", { state: "attached", timeout: 10_000 });
+  await page.locator("#official-refresh").click({ force: true });
+  await page.waitForFunction(() => document.querySelector("#official-preview-title")?.textContent?.includes("99992"), null, { timeout: 15_000 });
   await page.locator("#official-register").click({ force: true });
   await page.waitForFunction(() => (globalThis.SULotoContests.exportData() || []).some(item => Number(item.number) === 99992));
 
