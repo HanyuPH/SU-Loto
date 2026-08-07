@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 const baseUrl = process.env.QA_BASE_URL || "http://127.0.0.1:4173/";
 const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext({ serviceWorkers: "allow" });
+// PWA/offline é validado pelos outros smoke tests. Aqui bloqueamos Service Worker
+// para que o resultado oficial simulado seja interceptado de forma determinística.
+const context = await browser.newContext({ serviceWorkers: "block" });
 const page = await context.newPage();
 
 await page.route("https://www.gstatic.com/**", route => route.abort());
