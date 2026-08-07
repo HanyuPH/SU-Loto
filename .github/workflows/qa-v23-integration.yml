@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - release/beta-v23-rc1
+  pull_request:
+    branches:
+      - agent/su-loto-v23-pages-results
   workflow_dispatch:
 
 permissions:
