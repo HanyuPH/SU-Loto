@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-v23-sync-v3";
+const CACHE = "su-loto-c2-v23-sync-v4";
 
 const PRECACHE = [
   "./",

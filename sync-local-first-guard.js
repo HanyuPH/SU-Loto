@@ -4,10 +4,10 @@
   const STATUS_KEY = "su-loto-c2-status-v4";
   const VALID = new Set(["pendente", "registrado", "apostado"]);
   const dirtyStatuses = new Map();
-  let quietTimer = null;
-  let savingSession = false;
   let observedCloudRoot = null;
   let cloudObserver = null;
+  let statusGestureUntil = 0;
+  let contestRefreshWrapped = false;
 
   function parsePayload(raw) {
     try {
@@ -61,12 +61,64 @@
     }
   }
 
+  function isStatusButton(target) {
+    return target?.closest?.(".game-card[data-id] .status-actions button[data-status]") || null;
+  }
+
   function rememberLocalIntent(event) {
-    const button = event.target.closest?.(".game-card[data-id] .status-actions button[data-status]");
+    const button = isStatusButton(event.target);
     if (!button) return;
     const id = String(button.closest(".game-card[data-id]")?.dataset.id || "");
     const status = String(button.dataset.status || "");
     if (id && VALID.has(status)) dirtyStatuses.set(id, status);
+
+    // Marca apenas o ciclo do clique de status. O app atualiza cartão e contador
+    // imediatamente; qualquer recálculo pesado de concursos é empurrado para
+    // depois da primeira pintura do navegador.
+    statusGestureUntil = performance.now() + 250;
+  }
+
+  function wrapContestRefresh() {
+    if (contestRefreshWrapped) return true;
+    const contests = globalThis.SULotoContests;
+    if (!contests || typeof contests.refresh !== "function") return false;
+
+    const originalRefresh = contests.refresh.bind(contests);
+    let queued = false;
+    let latestArgs = [];
+
+    contests.refresh = (...args) => {
+      const fromStatusGesture = performance.now() <= statusGestureUntil;
+      if (!fromStatusGesture) return originalRefresh(...args);
+
+      const scope = document.getElementById("contest-scope")?.value || "all";
+      if (scope === "all") return;
+
+      latestArgs = args;
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          queued = false;
+          originalRefresh(...latestArgs);
+        }, 0);
+      });
+    };
+
+    try {
+      Object.defineProperty(contests, "__statusPaintFirstWrapped", { value: true });
+    } catch {}
+    contestRefreshWrapped = true;
+    return true;
+  }
+
+  function installContestRefreshDeferral() {
+    if (wrapContestRefresh()) return;
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (wrapContestRefresh() || attempts >= 200) clearInterval(timer);
+    }, 25);
   }
 
   function injectCloudUxStyle() {
@@ -81,18 +133,14 @@
       #su-loto-cloud-root[data-sync-quiet="true"] #su-loto-cloud-text{
         font-size:0!important;line-height:0!important;
       }
-      #su-loto-cloud-root[data-sync-quiet="true"] #su-loto-cloud-text::after{
+      #su-loto-cloud-root[data-sync-quiet="true"] #su-loto-cloud-status[data-state="saving"] #su-loto-cloud-text::after{
+        content:"…";font-size:1.1rem;line-height:1;color:#fff;
+      }
+      #su-loto-cloud-root[data-sync-quiet="true"] #su-loto-cloud-status[data-state="synced"] #su-loto-cloud-text::after{
         content:"✓";font-size:1rem;line-height:1;color:#fff;
       }
     `;
     document.head.appendChild(style);
-  }
-
-  function quietCloudRoot(root, delay) {
-    clearTimeout(quietTimer);
-    quietTimer = setTimeout(() => {
-      if (root?.isConnected) root.dataset.syncQuiet = "true";
-    }, delay);
   }
 
   function refreshCloudUx() {
@@ -104,29 +152,24 @@
     injectCloudUxStyle();
     const rawText = String(label.textContent || "").trim();
     const state = String(button.dataset.state || "");
-    const saving = state === "saving" || /Salvando|Sincronizando|Reconectando|Preparando|Verificando/i.test(rawText);
+    const backgroundSaving = state === "saving" && /Salvando (alterações|na nuvem|concursos)/i.test(rawText);
     const synced = state === "synced" || /Sincronizado/i.test(rawText);
 
-    if (saving) {
-      if (/Salvando (alterações|na nuvem|concursos)/i.test(rawText) && rawText !== "Salvando na nuvem…") {
-        label.textContent = "Salvando na nuvem…";
-      }
-      if (!savingSession) {
-        savingSession = true;
-        root.dataset.syncQuiet = "false";
-        quietCloudRoot(root, 2200);
-      }
+    if (backgroundSaving) {
+      if (rawText !== "Salvando na nuvem…") label.textContent = "Salvando na nuvem…";
+      root.dataset.syncQuiet = "true";
       return true;
     }
 
-    savingSession = false;
-    clearTimeout(quietTimer);
     if (synced) {
-      root.dataset.syncQuiet = "false";
-      quietCloudRoot(root, 1200);
-    } else {
-      root.dataset.syncQuiet = "false";
+      root.dataset.syncQuiet = "true";
+      return true;
     }
+
+    // Login, reconexão, sincronização manual, offline e erros continuam visíveis
+    // porque exigem atenção do usuário. Apenas a sincronização normal de fundo
+    // fica compacta no canto inferior direito.
+    root.dataset.syncQuiet = "false";
     return true;
   }
 
@@ -151,18 +194,20 @@
     let attempts = 0;
     const timer = setInterval(() => {
       attempts += 1;
-      if (attachCloudObserver(document.getElementById("su-loto-cloud-root")) || attempts >= 120) {
+      if (attachCloudObserver(document.getElementById("su-loto-cloud-root")) || attempts >= 200) {
         clearInterval(timer);
       }
-    }, 100);
+    }, 50);
   }
 
   document.addEventListener("click", rememberLocalIntent, true);
   window.addEventListener("storage", repairIncomingStorage, true);
+  installContestRefreshDeferral();
   installCloudUxObserver();
 
   globalThis.SULotoLocalFirstGuard = Object.freeze({
     pendingCount: () => dirtyStatuses.size,
-    pendingStatuses: () => Object.fromEntries(dirtyStatuses)
+    pendingStatuses: () => Object.fromEntries(dirtyStatuses),
+    contestRefreshWrapped: () => contestRefreshWrapped
   });
 })();
