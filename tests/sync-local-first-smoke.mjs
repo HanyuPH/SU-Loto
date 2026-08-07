@@ -19,15 +19,33 @@ try {
     registrado: Number(document.getElementById("count-registrado")?.textContent || 0)
   }));
 
-  const target = page.locator('.game-card[data-status="pendente"]').first();
-  const id = await target.getAttribute("data-id");
-  assert.ok(id, "Deve existir ao menos um jogo pendente para o teste");
+  // Mede apenas a resposta da aplicação depois que o clique chega ao DOM.
+  // Assim o resultado não inclui scroll/actionability do driver do navegador,
+  // que no WebKit pode levar segundos sem representar latência do aplicativo.
+  const local = await page.evaluate(() => {
+    const target = document.querySelector('.game-card[data-status="pendente"]');
+    const button = target?.querySelector('.status-actions button[data-status="apostado"]');
+    const counter = document.getElementById("count-apostado");
+    if (!target || !button || !counter) throw new Error("Jogo pendente ou botão Apostado indisponível");
+    const id = String(target.dataset.id || "");
+    const beforeCount = Number(counter.textContent || 0);
+    const startedAt = performance.now();
+    button.click();
+    const latency = performance.now() - startedAt;
+    return {
+      id,
+      beforeCount,
+      afterCount: Number(counter.textContent || 0),
+      cardStatus: target.dataset.status,
+      latency
+    };
+  });
 
-  const startedAt = Date.now();
-  await target.locator('.status-actions button[data-status="apostado"]').click();
-  await page.waitForFunction(expected => Number(document.getElementById("count-apostado")?.textContent || 0) === expected, before.apostado + 1, { timeout: 1_000 });
-  const localLatency = Date.now() - startedAt;
-  assert.ok(localLatency < 1_000, `Contador local deve responder antes da nuvem; medido ${localLatency} ms`);
+  assert.ok(local.id, "Deve existir ao menos um jogo pendente para o teste");
+  assert.equal(local.afterCount, local.beforeCount + 1, "Contador deve mudar no mesmo ciclo do clique local");
+  assert.equal(local.cardStatus, "apostado", "Cartão deve assumir Apostado imediatamente");
+  assert.ok(local.latency < 250, `Resposta local da aplicação deve ser imediata; medido ${local.latency.toFixed(1)} ms`);
+  const id = local.id;
 
   await page.evaluate(gameId => {
     const key = "su-loto-c2-status-v4";
@@ -77,14 +95,14 @@ try {
     root.innerHTML = '<button id="su-loto-cloud-status" data-state="saving"><span id="su-loto-cloud-text">Salvando alterações…</span></button>';
     document.body.appendChild(root);
   });
-  await page.waitForFunction(() => document.getElementById("su-loto-cloud-text")?.textContent === "Salvando na nuvem…");
+  await page.waitForFunction(() => document.getElementById("su-loto-cloud-text")?.textContent === "Salvando na nuvem…", null, { timeout: 2_000 });
   await page.waitForTimeout(600);
   await page.evaluate(() => { document.getElementById("su-loto-cloud-text").textContent = "Salvando alterações…"; });
-  await page.waitForFunction(() => document.getElementById("su-loto-cloud-text")?.textContent === "Salvando na nuvem…");
+  await page.waitForFunction(() => document.getElementById("su-loto-cloud-text")?.textContent === "Salvando na nuvem…", null, { timeout: 2_000 });
   await page.waitForTimeout(1_850);
   assert.equal(await page.locator("#su-loto-cloud-root").getAttribute("data-sync-quiet"), "true", "Aviso de salvamento repetitivo deve recolher sem ficar preso na tela");
 
-  console.log(`Smoke ${engineName} aprovado: contador local-first respondeu em ${localLatency} ms; snapshot antigo foi bloqueado e aviso de nuvem recolheu.`);
+  console.log(`Smoke ${engineName} aprovado: resposta local ${local.latency.toFixed(1)} ms; snapshot antigo bloqueado; alteração remota aceita; aviso de nuvem recolheu.`);
 } finally {
   await browser.close();
 }
