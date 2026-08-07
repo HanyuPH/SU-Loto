@@ -94,6 +94,7 @@ async function loadApplication() {
   globalThis.SU_LOTO_GAMES = deepFreeze(games);
   globalThis.SU_LOTO_OPERATIONAL_SEED = deepFreeze(operationalSeed);
 
+  await import("./sync-local-first-guard.js?v=1");
   await import("./contests.js");
   await import("./app.js");
   await import("./official-results.js");
@@ -108,7 +109,7 @@ async function loadApplication() {
     .then(() => import("./contest-selection-highlight.js?v=1"))
     .catch(error => console.error("SU Loto módulos locais:", error));
 
-  const cloudModules = import("./cloud-sync.js")
+  const cloudModules = import("./cloud-sync.js?v=2")
     .then(() => import("./ecosystem-ui.js?v=5"))
     .then(() => import("./ecosystem-backup.js"))
     .then(() => localModules)
