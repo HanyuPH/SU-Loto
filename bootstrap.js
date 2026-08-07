@@ -7,11 +7,8 @@ const FORBIDDEN_GAME_FIELDS = new Set(["status", "initialStatus", "registered", 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   const register = async () => {
-    try {
-      await navigator.serviceWorker.register("./service-worker.js");
-    } catch (error) {
-      console.warn("SU Loto: não foi possível registrar o Service Worker.", error);
-    }
+    try { await navigator.serviceWorker.register("./service-worker.js"); }
+    catch (error) { console.warn("SU Loto: não foi possível registrar o Service Worker.", error); }
   };
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
@@ -23,10 +20,7 @@ async function fetchJson(url) {
   return response.json();
 }
 
-function expectedSystem(id) {
-  return id <= 100 ? "Base preservada" : "Sistema Universal";
-}
-
+function expectedSystem(id) { return id <= 100 ? "Base preservada" : "Sistema Universal"; }
 function expectedGroup(id) {
   if (id <= 50) return "001–050";
   if (id <= 100) return "051–100";
@@ -44,23 +38,17 @@ function validateManifest(manifest) {
 }
 
 function validateGames(games) {
-  if (!Array.isArray(games) || games.length !== EXPECTED_GAME_COUNT) {
-    throw new Error(`Carteira inválida: esperados ${EXPECTED_GAME_COUNT} jogos.`);
-  }
+  if (!Array.isArray(games) || games.length !== EXPECTED_GAME_COUNT) throw new Error(`Carteira inválida: esperados ${EXPECTED_GAME_COUNT} jogos.`);
   const signatures = new Set();
   games.forEach((game, index) => {
     const id = Number(game?.id);
     if (id !== index + 1) throw new Error(`ID canônico inválido na posição ${index + 1}.`);
-    for (const key of Object.keys(game || {})) {
-      if (FORBIDDEN_GAME_FIELDS.has(key)) throw new Error(`Campo operacional proibido no jogo ${id}: ${key}.`);
-    }
+    for (const key of Object.keys(game || {})) if (FORBIDDEN_GAME_FIELDS.has(key)) throw new Error(`Campo operacional proibido no jogo ${id}: ${key}.`);
     if (game.system !== expectedSystem(id)) throw new Error(`Sistema divergente no jogo ${id}.`);
     if (game.group !== expectedGroup(id)) throw new Error(`Grupo divergente no jogo ${id}.`);
     if (!Array.isArray(game.numbers) || game.numbers.length !== 15) throw new Error(`Jogo ${id} não possui 15 dezenas.`);
     const unique = new Set(game.numbers);
-    if (unique.size !== 15 || game.numbers.some(number => !Number.isInteger(number) || number < 1 || number > 25)) {
-      throw new Error(`Dezenas inválidas no jogo ${id}.`);
-    }
+    if (unique.size !== 15 || game.numbers.some(number => !Number.isInteger(number) || number < 1 || number > 25)) throw new Error(`Dezenas inválidas no jogo ${id}.`);
     const signature = [...game.numbers].sort((a, b) => a - b).join("-");
     if (signatures.has(signature)) throw new Error(`Jogo duplicado detectado no ID ${id}.`);
     signatures.add(signature);
@@ -77,9 +65,7 @@ function deepFreeze(value) {
 async function loadWallet() {
   const manifest = await fetchJson(WALLET_MANIFEST_URL);
   validateManifest(manifest);
-  const shardPayloads = await Promise.all(
-    manifest.shards.map(shard => fetchJson(`./data/carteira-c2/${shard.file}`))
-  );
+  const shardPayloads = await Promise.all(manifest.shards.map(shard => fetchJson(`./data/carteira-c2/${shard.file}`)));
   const games = shardPayloads.flatMap(payload => Array.isArray(payload?.games) ? payload.games : []);
   validateGames(games);
   return { manifest, games };
@@ -97,6 +83,11 @@ async function loadOperationalMigration() {
   }
 }
 
+function loadBetaIdentity() {
+  const isBetaPath = location.pathname.split("/").includes("beta");
+  return isBetaPath ? import("./beta-banner.js?v=23") : Promise.resolve();
+}
+
 async function loadApplication() {
   const [{ manifest, games }, operationalSeed] = await Promise.all([loadWallet(), loadOperationalMigration()]);
   globalThis.SU_LOTO_WALLET_MANIFEST = deepFreeze(manifest);
@@ -108,6 +99,7 @@ async function loadApplication() {
   await import("./official-results.js");
   await import("./sync-events.js");
 
+  const betaIdentity = loadBetaIdentity().catch(error => console.warn("SU Loto identificação Beta:", error));
   const localModules = import("./beta-layout-review.js?v=2")
     .then(() => import("./prize-analysis.js?v=2"))
     .then(() => import("./contest-bets.js?v=4"))
@@ -122,17 +114,14 @@ async function loadApplication() {
     .then(() => import("./contest-bets-cloud.js?v=3"))
     .catch(error => console.warn("SU Loto nuvem indisponível:", error));
 
-  await Promise.allSettled([localModules, cloudModules]);
+  await Promise.allSettled([betaIdentity, localModules, cloudModules]);
 }
 
 registerServiceWorker();
-
 loadApplication().catch(error => {
   console.error("SU Loto: falha ao iniciar a aplicação.", error);
   const status = document.getElementById("save-status");
   if (status) status.textContent = "Falha ao validar ou carregar a Carteira Oficial C2.";
   const host = document.getElementById("games");
-  if (host) {
-    host.innerHTML = `<div class="empty"><strong>Aplicativo não iniciado.</strong><br>${String(error.message || error)}</div>`;
-  }
+  if (host) host.innerHTML = `<div class="empty"><strong>Aplicativo não iniciado.</strong><br>${String(error.message || error)}</div>`;
 });
