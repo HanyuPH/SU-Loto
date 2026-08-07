@@ -21,62 +21,59 @@ jobs:
       LOTO_BASE: https://hanyuph.github.io/SU-Loto
       MEGA_BASE: https://hanyuph.github.io/SU-Mega
     steps:
-      - name: Coletar publicação final e ambiente público
+      - name: Diagnosticar encadeamento final sem alterar estado
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
+          set -u
           mkdir -p /tmp/pages-diag
-          gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/pages-diag/main-runs.json
-          jq --arg sha "$FIX_COMMIT" '[.workflow_runs[] | select(.head_sha == $sha) | {id,name,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}]' /tmp/pages-diag/main-runs.json > /tmp/pages-diag/fix-runs.json
-          run_id=$(jq -r '.[] | select(.name == "Publicar SU Loto estável e Beta") | .id' /tmp/pages-diag/fix-runs.json | head -n1)
-          test -n "$run_id"
-          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > /tmp/pages-diag/final-pages-run.json
-          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" > /tmp/pages-diag/final-pages-jobs.json
-          gh api "/repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=50" > /tmp/pages-diag/deployments.json
-          deployment_id=$(jq -r --arg sha "$FIX_COMMIT" '.[] | select(.sha == $sha) | .id' /tmp/pages-diag/deployments.json | head -n1)
-          test -n "$deployment_id"
-          gh api "/repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" > /tmp/pages-diag/final-deployment-statuses.json
-          gh api "/repos/$GITHUB_REPOSITORY/environments/github-pages" > /tmp/pages-diag/environment.json
-          gh api "/repos/$GITHUB_REPOSITORY/environments/github-pages/deployment-branch-policies?per_page=100" > /tmp/pages-diag/branch-policies.json
-          gh api "/repos/$GITHUB_REPOSITORY/pages" > /tmp/pages-diag/pages.json
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50" > /tmp/pages-diag/main-runs.json || true
+          jq --arg sha "$FIX_COMMIT" '[.workflow_runs[] | select(.head_sha == $sha) | {id,name,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}]' /tmp/pages-diag/main-runs.json > /tmp/pages-diag/fix-runs.json 2>/dev/null || echo '[]' > /tmp/pages-diag/fix-runs.json
+          echo '=== TODOS OS RUNS DO COMMIT DA MAIN ==='
+          cat /tmp/pages-diag/fix-runs.json
 
-          audit="final-${FIX_COMMIT}-${GITHUB_RUN_ID}"
-          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/beta-banner.js?audit=$audit" > /tmp/pages-diag/loto-beta-banner.js
-          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/VERSION?audit=$audit" > /tmp/pages-diag/loto-beta-VERSION
-          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/bootstrap.js?audit=$audit" > /tmp/pages-diag/loto-beta-bootstrap.js
-          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/service-worker.js?audit=$audit" > /tmp/pages-diag/loto-beta-service-worker.js
-          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/beta/index.html?audit=$audit" > /tmp/pages-diag/loto-beta-index.html
-          curl -fsSL -H 'Cache-Control: no-cache' "$LOTO_BASE/service-worker.js?audit=$audit" > /tmp/pages-diag/loto-stable-service-worker.js
-          curl -fsSL -H 'Cache-Control: no-cache' "$MEGA_BASE/beta/beta-banner.js?audit=$audit" > /tmp/pages-diag/mega-beta-banner.js
-          curl -fsSL -H 'Cache-Control: no-cache' "$MEGA_BASE/beta/service-worker.js?audit=$audit" > /tmp/pages-diag/mega-beta-service-worker.js
+          run_id=$(jq -r '[.[] | select(.name == "Publicar SU Loto estável e Beta")][0].id // empty' /tmp/pages-diag/fix-runs.json)
+          echo "latest_pages_run=$run_id"
+          if test -n "$run_id"; then
+            gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > /tmp/pages-diag/latest-pages-run.json || true
+            gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" > /tmp/pages-diag/latest-pages-jobs.json || true
+            echo '=== LATEST PAGES RUN ==='
+            jq '{id,name,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}' /tmp/pages-diag/latest-pages-run.json 2>/dev/null || cat /tmp/pages-diag/latest-pages-run.json
+            echo '=== LATEST PAGES JOBS ==='
+            jq '[.jobs[] | {id,name,status,conclusion,started_at,completed_at,html_url}]' /tmp/pages-diag/latest-pages-jobs.json 2>/dev/null || cat /tmp/pages-diag/latest-pages-jobs.json
+          fi
 
-          grep -Fq 'const BUILD = "v23"' /tmp/pages-diag/loto-beta-banner.js
-          grep -Fq 'latestBetaDocumented=v23' /tmp/pages-diag/loto-beta-VERSION
-          grep -Fq 'beta-banner.js?v=23' /tmp/pages-diag/loto-beta-bootstrap.js
-          grep -Fq 'su-loto-c2-v23-sync-v2' /tmp/pages-diag/loto-beta-service-worker.js
-          grep -Fq 'src="bootstrap.js"' /tmp/pages-diag/loto-beta-index.html
-          grep -Fq 'stable-su-loto-c2-v11' /tmp/pages-diag/loto-stable-service-worker.js
-          grep -Fq 'const BUILD = "v29"' /tmp/pages-diag/mega-beta-banner.js
-          grep -Fq 'su-mega-c2-beta-v29' /tmp/pages-diag/mega-beta-service-worker.js
+          gh api "/repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=50" > /tmp/pages-diag/deployments.json || true
+          jq --arg sha "$FIX_COMMIT" '[.[] | select(.sha == $sha) | {id,ref,sha,created_at,updated_at,statuses_url}]' /tmp/pages-diag/deployments.json > /tmp/pages-diag/fix-deployments.json 2>/dev/null || echo '[]' > /tmp/pages-diag/fix-deployments.json
+          echo '=== DEPLOYMENTS DO COMMIT ==='
+          cat /tmp/pages-diag/fix-deployments.json
 
-          jq -e '.conclusion == "success"' /tmp/pages-diag/final-pages-run.json >/dev/null
-          jq -e '[.jobs[] | select(.name == "build" or .name == "deploy" or .name == "Verificar publicação real do Ecossistema SU") | .conclusion] | all(. == "success")' /tmp/pages-diag/final-pages-jobs.json >/dev/null
-          jq -e '.[0].state == "success"' /tmp/pages-diag/final-deployment-statuses.json >/dev/null
+          latest_deployment=$(jq -r '.[0].id // empty' /tmp/pages-diag/fix-deployments.json)
+          if test -n "$latest_deployment"; then
+            gh api "/repos/$GITHUB_REPOSITORY/deployments/$latest_deployment/statuses" > /tmp/pages-diag/latest-deployment-statuses.json || true
+            echo '=== STATUS DO DEPLOYMENT MAIS RECENTE ==='
+            jq '[.[] | {id,state,environment,environment_url,created_at,updated_at,log_url}]' /tmp/pages-diag/latest-deployment-statuses.json 2>/dev/null || cat /tmp/pages-diag/latest-deployment-statuses.json
+          fi
 
-          printf 'workflow_run=%s\ndeployment_id=%s\nsource_commit=%s\nSU Loto Beta=v23\nSU Loto stable=v11\nSU Mega Beta=v29\n' "$run_id" "$deployment_id" "$FIX_COMMIT" > /tmp/pages-diag/RESUMO-FINAL.txt
-          echo '=== RESUMO FINAL ==='
-          cat /tmp/pages-diag/RESUMO-FINAL.txt
-          echo '=== RUN ==='
-          jq '{id,name,event,status,conclusion,head_branch,head_sha,created_at,updated_at,html_url}' /tmp/pages-diag/final-pages-run.json
-          echo '=== JOBS ==='
-          jq '[.jobs[] | {id,name,status,conclusion,started_at,completed_at,html_url}]' /tmp/pages-diag/final-pages-jobs.json
-          echo '=== DEPLOYMENT STATUS ==='
-          jq '.[0] | {id,state,environment,environment_url,created_at,updated_at,log_url}' /tmp/pages-diag/final-deployment-statuses.json
+          audit="diag-${GITHUB_RUN_ID}"
+          for spec in \
+            "$LOTO_BASE/beta/beta-banner.js|const BUILD = \"v23\"|loto-banner" \
+            "$LOTO_BASE/beta/VERSION|latestBetaDocumented=v23|loto-version" \
+            "$LOTO_BASE/beta/bootstrap.js|beta-banner.js?v=23|loto-bootstrap" \
+            "$LOTO_BASE/beta/service-worker.js|su-loto-c2-v23-sync-v2|loto-sw" \
+            "$MEGA_BASE/beta/beta-banner.js|const BUILD = \"v29\"|mega-banner" \
+            "$MEGA_BASE/beta/service-worker.js|su-mega-c2-beta-v29|mega-sw"; do
+            IFS='|' read -r url pattern label <<< "$spec"
+            if curl -fsSL -H 'Cache-Control: no-cache' "$url?audit=$audit" -o "/tmp/pages-diag/$label.txt" && grep -Fq "$pattern" "/tmp/pages-diag/$label.txt"; then
+              echo "$label=OK" | tee -a /tmp/pages-diag/live-status.txt
+            else
+              echo "$label=FAIL" | tee -a /tmp/pages-diag/live-status.txt
+            fi
+          done
 
       - name: Preservar diagnóstico final
         uses: actions/upload-artifact@v4
         with:
-          name: diagnostico-final-publicacao-su-loto-v23
+          name: diagnostico-encadeamento-pages-su-loto-v23
           path: /tmp/pages-diag
           if-no-files-found: error
