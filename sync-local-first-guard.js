@@ -6,6 +6,8 @@
   const dirtyStatuses = new Map();
   let quietTimer = null;
   let savingSession = false;
+  let observedCloudRoot = null;
+  let cloudObserver = null;
 
   function parsePayload(raw) {
     try {
@@ -128,9 +130,12 @@
     return true;
   }
 
-  function installCloudUxObserver() {
-    const observer = new MutationObserver(() => refreshCloudUx());
-    observer.observe(document.documentElement, {
+  function attachCloudObserver(root) {
+    if (!root || root === observedCloudRoot) return Boolean(root);
+    cloudObserver?.disconnect();
+    observedCloudRoot = root;
+    cloudObserver = new MutationObserver(() => refreshCloudUx());
+    cloudObserver.observe(root, {
       childList: true,
       subtree: true,
       characterData: true,
@@ -138,6 +143,18 @@
       attributeFilter: ["data-state"]
     });
     refreshCloudUx();
+    return true;
+  }
+
+  function installCloudUxObserver() {
+    if (attachCloudObserver(document.getElementById("su-loto-cloud-root"))) return;
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (attachCloudObserver(document.getElementById("su-loto-cloud-root")) || attempts >= 120) {
+        clearInterval(timer);
+      }
+    }, 100);
   }
 
   document.addEventListener("click", rememberLocalIntent, true);
