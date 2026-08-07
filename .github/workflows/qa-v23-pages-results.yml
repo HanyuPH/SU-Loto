@@ -94,11 +94,22 @@ jobs:
           from pathlib import Path
 
           latest = json.loads(Path('public/data/ultimo-concurso.json').read_text(encoding='utf-8'))
-          history = json.loads(Path('public/data/concursos-oficiais.json').read_text(encoding='utf-8'))
+          history_payload = json.loads(Path('public/data/concursos-oficiais.json').read_text(encoding='utf-8'))
           number = int(latest.get('numero') or latest.get('number') or latest.get('concurso') or 0)
           if number <= 0:
               raise SystemExit('ultimo-concurso.json não contém número de concurso válido.')
-          if not isinstance(history, list) or not history:
-              raise SystemExit('concursos-oficiais.json não contém histórico válido.')
-          print(f'Artefato simulado aprovado. Último concurso presente: {number}.')
+
+          results = history_payload.get('results') if isinstance(history_payload, dict) else None
+          if not isinstance(results, list) or not results:
+              raise SystemExit('concursos-oficiais.json não contém a lista results esperada.')
+
+          history_numbers = {
+              int(item.get('numero') or item.get('number') or item.get('concurso') or 0)
+              for item in results
+              if isinstance(item, dict)
+          }
+          if number not in history_numbers:
+              raise SystemExit(f'O último concurso {number} não está presente no histórico publicado.')
+
+          print(f'Artefato simulado aprovado. Último concurso {number} presente no histórico e no Pages.')
           PY
