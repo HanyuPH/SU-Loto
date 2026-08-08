@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-v23-sync-v7";
+const CACHE = "su-loto-c2-v23-sync-v8";
 
 const PRECACHE = [
   "./",
@@ -18,6 +18,7 @@ const PRECACHE = [
   "./cloud-sync.js",
   "./ios-rest-status-refresh.js",
   "./cloud-resume-refresh.js",
+  "./ios-pwa-sync-coordinator.js",
   "./ecosystem-ui.js",
   "./ecosystem-backup.js",
   "./prize-analysis.js",
@@ -46,9 +47,14 @@ self.addEventListener("install", event => {
   self.skipWaiting();
 });
 
+self.addEventListener("message", event => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
       keys
         .filter(key => (
           key.startsWith("stable-su-loto-c2-") ||
@@ -57,9 +63,9 @@ self.addEventListener("activate", event => {
           key.startsWith("su-loto-c2-v23-")
         ) && key !== CACHE)
         .map(key => caches.delete(key))
-    ))
-  );
-  self.clients.claim();
+    );
+    await self.clients.claim();
+  })());
 });
 
 async function cachedIgnoringVersion(request) {
