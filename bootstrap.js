@@ -94,6 +94,7 @@ async function loadApplication() {
   globalThis.SU_LOTO_GAMES = deepFreeze(games);
   globalThis.SU_LOTO_OPERATIONAL_SEED = deepFreeze(operationalSeed);
 
+  await import("./firebase-ios-transport.js?v=1");
   await import("./sync-local-first-guard.js?v=1");
   await import("./contests.js");
   await import("./app.js");
