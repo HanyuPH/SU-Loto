@@ -1,0 +1,42 @@
+name: Auditoria temporária live resume boost
+
+on:
+  pull_request:
+    branches: [beta]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-resume-boost:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Conferir publicação pública da melhoria
+        run: |
+          set -euo pipefail
+          BASE="https://hanyuph.github.io/SU-Loto/beta"
+          MEGA="https://hanyuph.github.io/SU-Mega/beta"
+          audit="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          fetch_until() {
+            url="$1"; pattern="$2"; out="$3"
+            for i in $(seq 1 30); do
+              if curl --fail --silent --show-error --location --header 'Cache-Control: no-cache' "${url}?audit=${audit}-${i}" -o "$out" && grep -Fq "$pattern" "$out"; then
+                echo "OK: $url -> $pattern"
+                return 0
+              fi
+              sleep 5
+            done
+            echo "FALHA: $url não apresentou $pattern" >&2
+            test -f "$out" && head -c 1500 "$out" >&2 || true
+            exit 1
+          }
+          fetch_until "$BASE/bootstrap.js" 'cloud-resume-refresh.js?v=1' /tmp/bootstrap.js
+          fetch_until "$BASE/cloud-resume-refresh.js" 'getDocsFromServer' /tmp/boost.js
+          fetch_until "$BASE/cloud-resume-refresh.js" 'visibilitychange' /tmp/boost-visibility.js
+          fetch_until "$BASE/cloud-resume-refresh.js" 'BroadcastChannel' /tmp/boost-channel.js
+          fetch_until "$BASE/service-worker.js" 'cloud-resume-refresh.js' /tmp/sw.js
+          fetch_until "$BASE/VERSION" 'latestBetaDocumented=v23' /tmp/version.txt
+          fetch_until "https://hanyuph.github.io/SU-Loto/service-worker.js" 'stable-su-loto-c2-v11' /tmp/stable-sw.js
+          fetch_until "$MEGA/beta-banner.js" 'const BUILD = "v29"' /tmp/mega.js
+          echo 'Publicação live da melhoria confirmada.'
