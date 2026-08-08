@@ -1,0 +1,54 @@
+name: QA iOS Firestore transport
+
+on:
+  push:
+    branches:
+      - agent/su-loto-v23-ios-firestore-transport
+  pull_request:
+    branches:
+      - beta
+
+permissions:
+  contents: read
+
+jobs:
+  qa-ios-transport:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validar Carteira Oficial C2
+        run: node scripts/validate-wallet-data.mjs
+
+      - name: Verificar sintaxe
+        run: |
+          node --check bootstrap.js
+          node --check firebase-ios-transport.js
+          node --check service-worker.js
+
+      - name: Preservar startup local-first
+        run: node tests/sync-startup-architecture-smoke.mjs
+
+      - name: Preservar reforço de retomada
+        run: node tests/resume-realtime-boost-smoke.mjs
+
+      - name: Validar transporte iOS
+        run: node tests/ios-firestore-transport-smoke.mjs
+
+      - name: Confirmar escopo protegido
+        run: |
+          git fetch origin beta
+          changed="$(git diff --name-only origin/beta...HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -E '^data/carteira-c2/|^data/migrations/|^VERSION$|^app.js$|^contests.js$|^cloud-sync.js$|^cloud-resume-refresh.js$'; then
+            echo 'QA falhou: escopo protegido foi alterado.' >&2
+            exit 1
+          fi
