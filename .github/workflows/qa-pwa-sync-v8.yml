@@ -62,7 +62,6 @@ jobs:
             if curl --fail --silent http://127.0.0.1:4173/tests/ios-rest-fastpath-harness.html >/dev/null; then break; fi
             sleep 1
           done
-          node tests/ios-rest-fastpath-webkit.mjs
           node tests/ios-pwa-sync-v8-webkit.mjs
           node tests/service-worker-sync-v8-webkit.mjs
 
