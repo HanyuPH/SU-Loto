@@ -23,7 +23,8 @@ jobs:
             t="${GITHUB_RUN_ID}-${i}"
             curl -fsSL --retry 2 --max-time 15 "$base/firebase-ios-transport.js?audit=$t" -o /tmp/transport.js || true
             curl -fsSL --retry 2 --max-time 15 "$base/ios-cloud-shell.js?audit=$t" -o /tmp/shell.js || true
-            if grep -Fq 'sync-v9-hotfix1' /tmp/transport.js 2>/dev/null \
+            if grep -Fq 'protocol: ios ? "sync-v9" : "sdk"' /tmp/transport.js 2>/dev/null \
+              && grep -Fq 'hotfix: ios ? "write-login-1" : null' /tmp/transport.js 2>/dev/null \
               && grep -Fq 'operationalWriteBeforeMeta' /tmp/transport.js 2>/dev/null \
               && grep -Fq 'const PERSISTENCE_GRACE_MS = 1200' /tmp/shell.js 2>/dev/null \
               && grep -Fq 'const LOGIN_TIMEOUT_MS = 15000' /tmp/shell.js 2>/dev/null; then
