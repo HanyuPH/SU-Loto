@@ -1,0 +1,49 @@
+name: QA resume realtime boost
+
+on:
+  push:
+    branches:
+      - agent/su-loto-v23-resume-realtime-boost
+  pull_request:
+    branches:
+      - beta
+
+permissions:
+  contents: read
+
+jobs:
+  qa-resume-realtime:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validar Carteira Oficial C2
+        run: node scripts/validate-wallet-data.mjs
+
+      - name: Verificar sintaxe dos módulos alterados
+        run: |
+          node --check bootstrap.js
+          node --check cloud-resume-refresh.js
+          node --check service-worker.js
+
+      - name: Preservar arquitetura local-first existente
+        run: node tests/sync-startup-architecture-smoke.mjs
+
+      - name: Validar reforço de retomada
+        run: node tests/resume-realtime-boost-smoke.mjs
+
+      - name: Confirmar escopo protegido
+        run: |
+          git fetch origin beta
+          changed="$(git diff --name-only origin/beta...HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -E '^data/carteira-c2/|^data/migrations/|^VERSION$|^app.js$|^contests.js$'; then
+            echo 'QA falhou: escopo protegido foi alterado.' >&2
+            exit 1
+          fi
