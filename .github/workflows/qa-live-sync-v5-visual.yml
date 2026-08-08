@@ -1,0 +1,48 @@
+name: QA live e visual SU Loto v23 sync-v5
+
+on:
+  pull_request:
+    branches: [beta]
+  push:
+    branches: [audit/live-v23-sync-v5-visual]
+
+permissions:
+  contents: read
+
+jobs:
+  qa-live-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Baixar auditoria
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validar Carteira C2 antes da bateria
+        run: |
+          node scripts/validate-wallet-data.mjs
+          test "$(git diff --name-only origin/beta...HEAD 2>/dev/null | grep -E '^data/carteira-c2/|^data/migrations/|^VERSION$' | wc -l)" -eq 0 || {
+            echo 'A auditoria temporária não pode alterar C2, migrações ou VERSION.' >&2
+            exit 1
+          }
+
+      - name: Instalar Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium webkit
+
+      - name: Executar bateria pública e visual
+        run: node tests/live-post-sync-v5-visual.mjs
+
+      - name: Publicar evidências visuais
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: su-loto-v23-sync-v5-live-visual
+          path: artifacts/live-visual-sync-v5/
+          if-no-files-found: warn
+          retention-days: 7
