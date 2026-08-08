@@ -1,0 +1,61 @@
+name: QA diagnóstico Firestore somente leitura
+
+on:
+  push:
+    branches:
+      - agent/su-loto-v23-firestore-diagnostic
+  pull_request:
+    branches:
+      - beta
+
+permissions:
+  contents: read
+
+jobs:
+  qa-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validar Carteira Oficial C2
+        run: node scripts/validate-wallet-data.mjs
+
+      - name: Validar sintaxe e escopo somente leitura
+        run: |
+          node --check diagnostics/firestore-diagnostic.js
+          node tests/firestore-diagnostic-static.mjs
+
+      - name: Instalar WebKit
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps webkit
+
+      - name: Testar diagnóstico em WebKit/iPhone
+        run: |
+          python3 -m http.server 4173 >/tmp/su-loto-diag-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/diagnostics/firestore.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/firestore-diagnostic-webkit.mjs
+
+      - name: Confirmar que nenhum arquivo funcional foi alterado
+        run: |
+          git fetch origin beta
+          changed="$(git diff --name-only origin/beta...HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Ev '^(diagnostics/|tests/firestore-diagnostic-|\.github/workflows/qa-firestore-diagnostic\.yml$)' | grep -q .; then
+            echo 'QA falhou: diagnóstico alterou arquivo fora do escopo permitido.' >&2
+            exit 1
+          fi
