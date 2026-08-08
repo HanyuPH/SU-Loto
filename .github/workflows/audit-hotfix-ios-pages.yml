@@ -1,0 +1,36 @@
+name: Auditoria temporária hotfix iOS publicado
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aguardar e validar arquivos públicos da Beta
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://hanyuph.github.io/SU-Loto/beta"
+          ok=0
+          for i in $(seq 1 30); do
+            t="${GITHUB_RUN_ID}-${i}"
+            curl -fsSL --retry 2 --max-time 15 "$base/firebase-ios-transport.js?audit=$t" -o /tmp/transport.js || true
+            curl -fsSL --retry 2 --max-time 15 "$base/ios-cloud-shell.js?audit=$t" -o /tmp/shell.js || true
+            if grep -Fq 'sync-v9-hotfix1' /tmp/transport.js 2>/dev/null \
+              && grep -Fq 'operationalWriteBeforeMeta' /tmp/transport.js 2>/dev/null \
+              && grep -Fq 'const PERSISTENCE_GRACE_MS = 1200' /tmp/shell.js 2>/dev/null \
+              && grep -Fq 'const LOGIN_TIMEOUT_MS = 15000' /tmp/shell.js 2>/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 4
+          done
+          test "$ok" -eq 1
+          echo "Hotfix iOS confirmado no GitHub Pages"
