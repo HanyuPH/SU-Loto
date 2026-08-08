@@ -1,8 +1,8 @@
 name: Auditoria temporária Safari-PWA catch-up publicado
 
 on:
-  push:
-    branches: [audit/safari-pwa-catchup-pages-20260808]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
