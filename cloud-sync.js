@@ -14,8 +14,6 @@ import {
   persistentMultipleTabManager,
   collection,
   doc,
-  getDocs,
-  getDocsFromServer,
   onSnapshot,
   writeBatch,
   serverTimestamp,
@@ -61,6 +59,18 @@ let contestUploadTimer = null;
 let fullStatusSync = false;
 const pendingStatusIds = new Set();
 let remoteContestIds = new Set();
+
+// A inicialização é agora realmente local-first: os listeners são ligados antes
+// de qualquer escrita administrativa ou leitura extra do servidor.
+let statusServerReady = false;
+let contestsServerReady = false;
+let statusInitialized = false;
+let contestsInitialized = false;
+let statusPendingWrites = false;
+let contestsPendingWrites = false;
+let startupSlow = false;
+let startupSlowTimer = null;
+const startupStatusIntents = new Map();
 
 function parse(raw, fallback) {
   try { return JSON.parse(raw ?? ""); } catch { return fallback; }
@@ -139,6 +149,25 @@ function state(kind, text) {
   refreshPanel();
 }
 
+function realtimeState() {
+  if (!user) return;
+  if (!navigator.onLine) {
+    state("offline", "Offline • alterações em espera");
+    return;
+  }
+  if (!statusServerReady || !contestsServerReady) {
+    state("saving", startupSlow ? "Conexão lenta • sincronizando…" : "Conectando à nuvem…");
+    return;
+  }
+  startupSlow = false;
+  clearTimeout(startupSlowTimer);
+  if (statusPendingWrites || contestsPendingWrites || startupStatusIntents.size) {
+    state("saving", "Salvando na nuvem…");
+    return;
+  }
+  state("synced", "Sincronizado em tempo real");
+}
+
 function injectUi() {
   if (document.getElementById("su-loto-cloud-root")) return;
   const style = document.createElement("style");
@@ -191,7 +220,7 @@ function injectUi() {
     try {
       await uploadStatuses(localStatuses());
       await uploadContests(localContests());
-      state("synced", "Sincronizado");
+      realtimeState();
     } catch (error) {
       console.error("SU Loto sincronização manual:", error);
       state("error", "Falha na sincronização");
@@ -203,12 +232,14 @@ function injectUi() {
     refreshPanel();
   };
 
-  window.addEventListener("offline", () => state("offline", "Offline • alterações em espera"));
+  window.addEventListener("offline", () => realtimeState());
   window.addEventListener("online", () => {
     if (!user) return;
     state("saving", "Reconectando…");
-    scheduleStatusUpload();
+    const localFirstPending = new Set(Object.keys(globalThis.SULotoLocalFirstGuard?.pendingStatuses?.() || {}));
+    if (localFirstPending.size) scheduleStatusUpload(localFirstPending);
     scheduleContestUpload();
+    realtimeState();
   });
 
   const footer = document.querySelector("footer p");
@@ -320,6 +351,23 @@ function snapshotStatuses(snapshot) {
   return output;
 }
 
+function snapshotStatusIds(snapshot) {
+  const ids = new Set();
+  snapshot.forEach(item => ids.add(String(item.id)));
+  return ids;
+}
+
+function overlayStartupStatusIntents(statuses, remoteIds, snapshot) {
+  for (const [id, desired] of startupStatusIntents) {
+    if (remoteIds.has(id) && statuses[id] === desired && !snapshot.metadata.hasPendingWrites) {
+      startupStatusIntents.delete(id);
+      continue;
+    }
+    statuses[id] = desired;
+  }
+  return statuses;
+}
+
 function snapshotContests(snapshot) {
   const list = [];
   remoteContestIds = new Set();
@@ -375,45 +423,68 @@ function applyContests(contests) {
   }
 }
 
-async function initialStatuses() {
-  const reference = statusesCollection(user.uid);
-  let snapshot;
-  try { snapshot = await getDocsFromServer(reference); }
-  catch { snapshot = await getDocs(reference); }
-
+function reconcileFirstStatusSnapshot(snapshot) {
   const local = localStatuses();
-  const remoteIds = new Set();
+  const remoteIds = snapshotStatusIds(snapshot);
   const remote = snapshotStatuses(snapshot);
-  snapshot.forEach(item => remoteIds.add(String(item.id)));
-
   const missingNonPending = Object.entries(local)
     .filter(([id, status]) => status !== "pendente" && !remoteIds.has(id));
-  if (missingNonPending.length) {
-    await uploadStatuses(local, new Set(missingNonPending.map(([id]) => id)));
-    for (const [id, status] of missingNonPending) remote[id] = status;
+
+  for (const [id, status] of missingNonPending) {
+    startupStatusIntents.set(id, status);
+    remote[id] = status;
   }
-  return remote;
+  applyStatuses(overlayStartupStatusIntents(remote, remoteIds, snapshot));
+
+  if (missingNonPending.length) {
+    const ids = new Set(missingNonPending.map(([id]) => id));
+    statusPendingWrites = true;
+    realtimeState();
+    void uploadStatuses(local, ids).catch(error => {
+      console.error("SU Loto reconciliação inicial de status:", error);
+      state(navigator.onLine ? "error" : "offline", navigator.onLine ? "Falha ao salvar" : "Offline • alterações em espera");
+    });
+  }
 }
 
-async function initialContests() {
-  const reference = contestsCollection(user.uid);
-  let snapshot;
-  try { snapshot = await getDocsFromServer(reference); }
-  catch { snapshot = await getDocs(reference); }
+function reconcileFirstContestSnapshot(snapshot) {
   const remote = snapshotContests(snapshot);
   const local = localContests();
   const merged = mergeContests(local, remote);
   applyContests(merged);
-  if (JSON.stringify(merged) !== JSON.stringify(remote)) await uploadContests(merged);
+  if (JSON.stringify(merged) !== JSON.stringify(remote)) {
+    contestsPendingWrites = true;
+    realtimeState();
+    void uploadContests(merged).catch(error => {
+      console.error("SU Loto reconciliação inicial de concursos:", error);
+      state(navigator.onLine ? "error" : "offline", navigator.onLine ? "Falha nos concursos" : "Offline • alterações em espera");
+    });
+  }
 }
 
 function listenStatuses() {
   stopStatus?.();
   stopStatus = onSnapshot(statusesCollection(user.uid), { includeMetadataChanges: true }, snapshot => {
-    applyStatuses(snapshotStatuses(snapshot));
-    if (!navigator.onLine || snapshot.metadata.fromCache) state("offline", "Dados locais • aguardando servidor");
-    else if (snapshot.metadata.hasPendingWrites) state("saving", "Salvando na nuvem…");
-    else state("synced", "Sincronizado em tempo real");
+    statusPendingWrites = snapshot.metadata.hasPendingWrites;
+
+    // O primeiro snapshot em cache não deve substituir o estado operacional já
+    // visível. Esperamos o primeiro snapshot de servidor, mas o listener já está
+    // ativo e a requisição de tempo real já foi iniciada.
+    if (!statusServerReady && snapshot.metadata.fromCache) {
+      realtimeState();
+      return;
+    }
+
+    if (!snapshot.metadata.fromCache) statusServerReady = true;
+    if (!statusInitialized && statusServerReady) {
+      statusInitialized = true;
+      reconcileFirstStatusSnapshot(snapshot);
+    } else if (statusInitialized) {
+      const remoteIds = snapshotStatusIds(snapshot);
+      const remote = overlayStartupStatusIntents(snapshotStatuses(snapshot), remoteIds, snapshot);
+      applyStatuses(remote);
+    }
+    realtimeState();
   }, error => {
     console.error("SU Loto listener de status:", error);
     state("error", `Falha na sincronização (${error.code || "erro"})`);
@@ -423,10 +494,21 @@ function listenStatuses() {
 function listenContests() {
   stopContests?.();
   stopContests = onSnapshot(contestsCollection(user.uid), { includeMetadataChanges: true }, snapshot => {
-    applyContests(snapshotContests(snapshot));
-    if (!navigator.onLine || snapshot.metadata.fromCache) state("offline", "Dados locais • aguardando servidor");
-    else if (snapshot.metadata.hasPendingWrites) state("saving", "Salvando na nuvem…");
-    else state("synced", "Sincronizado em tempo real");
+    contestsPendingWrites = snapshot.metadata.hasPendingWrites;
+
+    if (!contestsServerReady && snapshot.metadata.fromCache) {
+      realtimeState();
+      return;
+    }
+
+    if (!snapshot.metadata.fromCache) contestsServerReady = true;
+    if (!contestsInitialized && contestsServerReady) {
+      contestsInitialized = true;
+      reconcileFirstContestSnapshot(snapshot);
+    } else if (contestsInitialized) {
+      applyContests(snapshotContests(snapshot));
+    }
+    realtimeState();
   }, error => {
     console.error("SU Loto listener de concursos:", error);
     state("error", `Falha nos concursos (${error.code || "erro"})`);
@@ -445,7 +527,7 @@ function scheduleStatusUpload(ids = null) {
     state(navigator.onLine ? "saving" : "offline", navigator.onLine ? "Salvando alterações…" : "Offline • alterações em espera");
     try {
       await uploadStatuses(localStatuses(), requested);
-      if (navigator.onLine) state("synced", "Sincronizado em tempo real");
+      realtimeState();
     } catch (error) {
       console.error("SU Loto status na nuvem:", error);
       state(navigator.onLine ? "error" : "offline", navigator.onLine ? "Falha ao salvar" : "Offline • alterações em espera");
@@ -460,7 +542,7 @@ function scheduleContestUpload() {
     state(navigator.onLine ? "saving" : "offline", navigator.onLine ? "Salvando concursos…" : "Offline • alterações em espera");
     try {
       await uploadContests(localContests());
-      if (navigator.onLine) state("synced", "Sincronizado em tempo real");
+      realtimeState();
     } catch (error) {
       console.error("SU Loto concursos na nuvem:", error);
       state(navigator.onLine ? "error" : "offline", navigator.onLine ? "Falha nos concursos" : "Offline • alterações em espera");
@@ -479,27 +561,50 @@ function installStateEvents() {
   });
 }
 
-async function start(current) {
+function resetRealtimeBootstrap() {
+  statusServerReady = false;
+  contestsServerReady = false;
+  statusInitialized = false;
+  contestsInitialized = false;
+  statusPendingWrites = false;
+  contestsPendingWrites = false;
+  startupSlow = false;
+  startupStatusIntents.clear();
+  clearTimeout(startupSlowTimer);
+}
+
+function start(current) {
   if (startedUid === current.uid) return;
   startedUid = current.uid;
-  state("saving", "Preparando sincronização…");
-  await setDoc(doc(db, "users", current.uid, "settings", "ecosystem"), {
-    products: { suMega: true, suLoto: true },
-    updatedAt: serverTimestamp()
-  }, { merge: true });
+  resetRealtimeBootstrap();
+  state("saving", "Conectando à nuvem…");
 
-  const [statuses] = await Promise.all([initialStatuses(), initialContests()]);
-  applyStatuses(statuses);
+  // Ordem crítica: o tempo real é ativado imediatamente. Nenhuma escrita de
+  // configuração ou leitura completa bloqueia mais a chegada do estado remoto.
   listenStatuses();
   listenContests();
-  state(navigator.onLine ? "synced" : "offline", navigator.onLine ? "Sincronizado em tempo real" : "Offline • cache local");
+
+  startupSlowTimer = setTimeout(() => {
+    if (!statusServerReady || !contestsServerReady) {
+      startupSlow = true;
+      realtimeState();
+    }
+  }, 8000);
+
+  // Metadado administrativo não participa do caminho crítico da sincronização.
+  void setDoc(doc(db, "users", current.uid, "settings", "ecosystem"), {
+    products: { suMega: true, suLoto: true },
+    updatedAt: serverTimestamp()
+  }, { merge: true }).catch(error => {
+    console.warn("SU Loto configuração do ecossistema não bloqueante:", error);
+  });
 }
 
 injectUi();
 installStateEvents();
 state("saving", "Verificando login…");
 
-onAuthStateChanged(auth, async current => {
+onAuthStateChanged(auth, current => {
   user = current;
   const gate = document.getElementById("su-loto-cloud-gate");
   if (gate) gate.hidden = Boolean(current);
@@ -510,11 +615,12 @@ onAuthStateChanged(auth, async current => {
     stopContests?.();
     stopStatus = null;
     stopContests = null;
+    resetRealtimeBootstrap();
     state("offline", "Entre para sincronizar");
     return;
   }
   try {
-    await start(current);
+    start(current);
   } catch (error) {
     console.error("SU Loto sincronização:", error);
     state("error", `Erro: ${error.code || error.message || "nuvem"}`);

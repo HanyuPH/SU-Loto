@@ -109,7 +109,7 @@ async function loadApplication() {
     .then(() => import("./contest-selection-highlight.js?v=1"))
     .catch(error => console.error("SU Loto módulos locais:", error));
 
-  const cloudModules = import("./cloud-sync.js?v=2")
+  const cloudModules = import("./cloud-sync.js?v=3")
     .then(() => import("./ecosystem-ui.js?v=5"))
     .then(() => import("./ecosystem-backup.js"))
     .then(() => localModules)
