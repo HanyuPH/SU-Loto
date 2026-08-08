@@ -3,13 +3,47 @@ const OPERATIONAL_MIGRATION_URL = "./data/migrations/v11-operational-seed.json";
 const EXPECTED_WALLET = "SU Loto - C2";
 const EXPECTED_GAME_COUNT = 300;
 const FORBIDDEN_GAME_FIELDS = new Set(["status", "initialStatus", "registered", "apostado", "pendente"]);
+const SERVICE_WORKER_BUILD = "sync-v8";
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
+  const hadController = Boolean(navigator.serviceWorker.controller);
+
+  if (hadController) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      const reloadKey = `su-loto-sw-controller-${SERVICE_WORKER_BUILD}`;
+      if (sessionStorage.getItem(reloadKey) === "done") return;
+      sessionStorage.setItem(reloadKey, "done");
+      location.reload();
+    }, { once: true });
+  }
+
   const register = async () => {
-    try { await navigator.serviceWorker.register("./service-worker.js"); }
-    catch (error) { console.warn("SU Loto: não foi possível registrar o Service Worker.", error); }
+    try {
+      const registration = await navigator.serviceWorker.register(`./service-worker.js?build=${SERVICE_WORKER_BUILD}`, {
+        updateViaCache: "none"
+      });
+
+      const promote = worker => {
+        if (worker) worker.postMessage({ type: "SKIP_WAITING", build: SERVICE_WORKER_BUILD });
+      };
+
+      if (registration.waiting) promote(registration.waiting);
+      registration.addEventListener("updatefound", () => {
+        const worker = registration.installing;
+        if (!worker) return;
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "installed" && navigator.serviceWorker.controller) promote(worker);
+        });
+      });
+
+      try { await registration.update(); }
+      catch (error) { console.warn("SU Loto: verificação imediata de atualização do PWA falhou.", error); }
+    } catch (error) {
+      console.warn("SU Loto: não foi possível registrar o Service Worker.", error);
+    }
   };
+
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
 }
@@ -114,6 +148,7 @@ async function loadApplication() {
     .then(() => import("./ios-rest-status-refresh.js?v=1"))
     .then(() => import("./cloud-resume-refresh.js?v=2"))
     .then(() => import("./ecosystem-ui.js?v=5"))
+    .then(() => import("./ios-pwa-sync-coordinator.js?v=1"))
     .then(() => import("./ecosystem-backup.js"))
     .then(() => localModules)
     .then(() => import("./contest-bets-cloud.js?v=3"))
