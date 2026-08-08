@@ -1,0 +1,95 @@
+name: QA temporário hotfix iOS gravação/login
+
+on:
+  pull_request:
+    branches: [beta]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Validar sintaxe e escopo
+        run: |
+          set -euo pipefail
+          node --check firebase-ios-transport.js
+          node --check ios-cloud-shell.js
+          grep -Fq 'sync-v9-hotfix1' firebase-ios-transport.js
+          grep -Fq 'operationalResponse = await nativeFetch' firebase-ios-transport.js
+          grep -Fq 'if (!operationalResponse.ok) return operationalResponse' firebase-ios-transport.js
+          grep -Fq 'Promise.race([persistenceReady, wait(PERSISTENCE_GRACE_MS)])' ios-cloud-shell.js
+          grep -Fq 'const PERSISTENCE_GRACE_MS = 1200' ios-cloud-shell.js
+          grep -Fq 'const LOGIN_TIMEOUT_MS = 15000' ios-cloud-shell.js
+          git diff --name-only origin/beta...HEAD | tee /tmp/changed.txt
+          test "$(grep -Ev '^(firebase-ios-transport\.js|ios-cloud-shell\.js|\.github/workflows/qa-ios-hotfix-sync-v9\.yml)$' /tmp/changed.txt | wc -l)" -eq 0
+
+      - name: Simular commit operacional com syncMeta recusado
+        run: |
+          cat > /tmp/test-hotfix.mjs <<'NODE'
+          import fs from 'node:fs/promises';
+          import vm from 'node:vm';
+          import assert from 'node:assert/strict';
+
+          let source = await fs.readFile('firebase-ios-transport.js', 'utf8');
+          source = source.replace(/^import .*?;\n/m, '');
+          source = 'const getApps = () => []; const initializeApp = () => ({});\n' + source;
+
+          const calls = [];
+          const nativeFetch = async (input, init = {}) => {
+            const payload = JSON.parse(init.body || '{}');
+            calls.push(payload);
+            const isMetaOnly = payload.writes?.every(write => String(write?.update?.name || '').endsWith('/suLoto/C2/syncMeta/state'));
+            return { ok: !isMetaOnly, status: isMetaOnly ? 403 : 200, json: async () => ({}) };
+          };
+
+          const context = {
+            navigator: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X)', platform: 'iPhone', maxTouchPoints: 5 },
+            console,
+            globalThis: null,
+            fetch: nativeFetch,
+            setTimeout,
+            clearTimeout
+          };
+          context.globalThis = context;
+          vm.createContext(context);
+          vm.runInContext(source, context, { filename: 'firebase-ios-transport.js' });
+
+          const commitUrl = 'https://firestore.googleapis.com/v1/projects/su-mega/databases/(default)/documents:commit';
+          const operational = { update: { name: 'projects/su-mega/databases/(default)/documents/users/u1/suLoto/C2/gameStatuses/043', fields: {} } };
+          const meta = { update: { name: 'projects/su-mega/databases/(default)/documents/users/u1/suLoto/C2/syncMeta/state', fields: {} } };
+          const response = await context.fetch(commitUrl, { method: 'POST', body: JSON.stringify({ writes: [operational, meta] }) });
+          await new Promise(resolve => setTimeout(resolve, 10));
+
+          assert.equal(response.ok, true, 'a resposta operacional deve permanecer sucesso');
+          assert.equal(calls.length, 2, 'deve separar write operacional e syncMeta');
+          assert.equal(calls[0].writes.length, 1);
+          assert.match(calls[0].writes[0].update.name, /gameStatuses\/043$/);
+          assert.equal(calls[1].writes.length, 1);
+          assert.match(calls[1].writes[0].update.name, /syncMeta\/state$/);
+          assert.equal(context.SULotoFirestoreTransport.operationalWriteBeforeMeta, true);
+          assert.equal(context.SULotoFirestoreTransport.protocol, 'sync-v9-hotfix1');
+          console.log('Commit operacional preservado com syncMeta 403: OK');
+          NODE
+          node /tmp/test-hotfix.mjs
+
+      - name: Verificar proteção do login contra persistência travada
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const assert = require('assert');
+          const source = fs.readFileSync('ios-cloud-shell.js', 'utf8');
+          assert(source.includes('Promise.race([persistenceReady, wait(PERSISTENCE_GRACE_MS)])'));
+          assert(source.includes('Promise.race([\n            signInWithEmailAndPassword(auth, email, password),\n            loginTimeout()'));
+          assert(source.includes('resetLoginButton();'));
+          assert(source.includes('protocol = globalThis.SULotoFirestoreTransport?.protocol'));
+          console.log('Proteção contra login preso: OK');
+          NODE
