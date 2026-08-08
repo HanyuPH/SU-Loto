@@ -37,7 +37,7 @@ jobs:
             return 1
           }
 
-          fetch_until "$BASE/diagnostics/firestore.html" 'Diagnóstico Firestore • SU Loto Beta v23' /tmp/diag.html
+          fetch_until "$BASE/diagnostics/firestore.html" '<title>SU Loto Beta v23 — Diagnóstico Firestore</title>' /tmp/diag.html
           fetch_until "$BASE/diagnostics/firestore-diagnostic.js" 'getDocsFromServer' /tmp/diag.js
           fetch_until "$BASE/diagnostics/firestore-diagnostic.js" 'firestore.googleapis.com' /tmp/diag-rest.js
           fetch_until "$BASE/diagnostics/firestore-diagnostic.js" 'REST funciona, mas o SDK Firestore falhou' /tmp/diag-diagnosis.js
