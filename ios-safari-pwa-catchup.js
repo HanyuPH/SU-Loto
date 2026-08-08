@@ -1,5 +1,6 @@
 const active = Boolean(globalThis.SULotoFirestoreTransport?.ios && globalThis.SULotoFirestoreTransport?.restOnly);
-const engine = globalThis.SULotoIOSRestOperationalSync;
+let engine = null;
+let initialized = false;
 const STATE_EVENT = "su:loto-rest-sync-state";
 const STATUS_KEY = "su-loto-c2-status-v4";
 const LAST_SYNC_KEY = "su-loto-c2-rest-last-sync-v1";
@@ -132,10 +133,22 @@ async function recover(reason = "retomada") {
   return recoveryPromise;
 }
 
-if (active && engine?.active) {
-  // O listener é registrado antes do ios-cloud-shell. Durante a janela de
-  // retomada, um erro genérico do sincronizador antigo não deve encerrar a UI
-  // antes que a leitura determinística de recuperação tenha terminado.
+async function waitForEngine(timeoutMs = 12000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const candidate = globalThis.SULotoIOSRestOperationalSync;
+    if (candidate?.active) return candidate;
+    await sleep(50);
+  }
+  return null;
+}
+
+function installListeners() {
+  if (initialized || !engine?.active) return;
+  initialized = true;
+
+  // O listener é registrado antes/independentemente do painel. Durante uma
+  // retomada, um erro genérico não encerra a UI antes da leitura de recuperação.
   window.addEventListener(STATE_EVENT, event => {
     const detail = event.detail || {};
     if (detail.source === "ios-safari-pwa-catchup") return;
@@ -152,18 +165,27 @@ if (active && engine?.active) {
   window.addEventListener("pageshow", () => void recover("pageshow"));
   window.addEventListener("focus", () => void recover("foco"));
   window.addEventListener("online", () => void recover("online"));
-
-  // Se o módulo entrar quando a sessão já estiver autenticada/visível, a
-  // própria engine terminará o login e o próximo evento/foco fará o catch-up.
 }
 
+async function init() {
+  if (!active) return false;
+  engine = await waitForEngine();
+  if (!engine) return false;
+  installListeners();
+  if (onlineAndVisible()) setTimeout(() => void recover("inicialização"), 0);
+  return true;
+}
+
+void init();
+
 globalThis.SULotoIOSSafariPWACatchup = Object.freeze({
-  active: Boolean(active && engine?.active),
+  active,
   protocol: "sync-v9",
   hotfix: "safari-pwa-catchup-2",
   recover,
   diagnostics: () => ({
     active: Boolean(active && engine?.active),
+    initialized,
     recoveryInFlight: Boolean(recoveryPromise),
     pendingStatuses: pendingStatuses(),
     engine: diagnostics(),
