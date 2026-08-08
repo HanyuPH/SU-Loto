@@ -1,0 +1,110 @@
+name: Auditoria pública temporária sync-v9
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Auditar arquivos públicos com cache-busting
+        run: |
+          set -euo pipefail
+          BASE="https://hanyuph.github.io/SU-Loto"
+          MEGA="https://hanyuph.github.io/SU-Mega"
+          stamp="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          fetch() { curl --fail --silent --show-error --location -H 'Cache-Control: no-cache' "$1?audit=${stamp}-$RANDOM"; }
+          fetch "$BASE/beta/bootstrap.js" > /tmp/bootstrap.js
+          fetch "$BASE/beta/service-worker.js" > /tmp/sw.js
+          fetch "$BASE/beta/firebase-ios-transport.js" > /tmp/transport.js
+          fetch "$BASE/beta/ios-rest-operational-sync.js" > /tmp/rest.js
+          fetch "$BASE/beta/ios-cloud-shell.js" > /tmp/shell.js
+          fetch "$BASE/beta/official-results-live-refresh.js" > /tmp/results-live.js
+          fetch "$BASE/beta/data/ultimo-concurso.json" > /tmp/beta-result.json
+          fetch "$BASE/data/ultimo-concurso.json" > /tmp/stable-result.json
+          fetch "$BASE/VERSION" > /tmp/stable-version.txt
+          fetch "$BASE/beta/VERSION" > /tmp/beta-version.txt
+          fetch "$MEGA/beta/beta-banner.js" > /tmp/mega-banner.js
+
+          grep -Fq 'const SERVICE_WORKER_BUILD = "sync-v9"' /tmp/bootstrap.js
+          grep -Fq 'firebase-ios-transport.js?v=2' /tmp/bootstrap.js
+          grep -Fq 'ios-rest-operational-sync.js?v=1' /tmp/bootstrap.js
+          grep -Fq 'ios-cloud-shell.js?v=1' /tmp/bootstrap.js
+          grep -Fq 'official-results-live-refresh.js?v=1' /tmp/bootstrap.js
+          grep -Fq 'su-loto-c2-v23-sync-v9' /tmp/sw.js
+          grep -Fq 'restOnly: ios' /tmp/transport.js
+          grep -Fq 'protocol: "sync-v9"' /tmp/rest.js
+          grep -Fq 'POLL_MS = 2000' /tmp/rest.js
+          grep -Fq 'suLotoContestBetsC2' /tmp/rest.js
+          grep -Fq 'REST sync-v9' /tmp/shell.js
+          grep -Fq 'servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil' /tmp/results-live.js
+          grep -Fq '"number": 3756' /tmp/beta-result.json
+          grep -Fq '"number": 3756' /tmp/stable-result.json
+          cmp /tmp/beta-result.json /tmp/stable-result.json
+          grep -Fq 'stableVersion=v11' /tmp/stable-version.txt
+          grep -Fq 'latestBetaDocumented=v23' /tmp/beta-version.txt
+          grep -Fq 'const BUILD = "v29"' /tmp/mega-banner.js
+          echo 'Arquivos públicos sync-v9/3756/v11/v29: OK'
+
+      - name: Instalar Playwright WebKit
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps webkit
+
+      - name: Abrir Beta publicada como iPhone/WebKit
+        run: |
+          cat > /tmp/live.mjs <<'NODE'
+          import { webkit, devices } from 'playwright';
+          import assert from 'node:assert/strict';
+          const browser = await webkit.launch({ headless: true });
+          const context = await browser.newContext({ ...devices['iPhone 15 Pro'] });
+          const page = await context.newPage();
+          const errors = [];
+          page.on('pageerror', error => errors.push(String(error.message || error)));
+          await page.goto(`https://hanyuph.github.io/SU-Loto/beta/?audit=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await page.waitForFunction(() => Array.isArray(globalThis.SU_LOTO_GAMES) && globalThis.SU_LOTO_GAMES.length === 300, null, { timeout: 20000 });
+          await page.waitForFunction(() => globalThis.SULotoFirestoreTransport?.restOnly === true, null, { timeout: 10000 });
+          const transport = await page.evaluate(() => globalThis.SULotoFirestoreTransport);
+          assert.equal(transport.protocol, 'sync-v9');
+          assert.equal(transport.restOnly, true);
+          await page.evaluate(() => {
+            const gate = document.getElementById('su-loto-cloud-gate');
+            if (gate) gate.hidden = true;
+            const tab = document.querySelector('[data-view="contests-view"]');
+            if (tab) tab.click();
+          });
+          await page.waitForFunction(() => document.getElementById('official-preview-title')?.textContent.includes('3756'), null, { timeout: 20000 });
+          const view = await page.evaluate(() => ({
+            total: document.querySelector('[data-count="total"]')?.textContent || document.body.innerText.match(/Total\s+300/)?.[0] || '',
+            result: document.getElementById('official-preview-title')?.textContent || '',
+            beta: document.body.innerText.includes('SU Loto Beta v23'),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2,
+            transport: globalThis.SULotoFirestoreTransport
+          }));
+          assert.match(view.result, /3756/);
+          assert.equal(view.beta, true);
+          assert.equal(view.horizontalOverflow, false);
+          assert.equal(view.transport.protocol, 'sync-v9');
+          await page.screenshot({ path: 'audit-sync-v9-iphone.png', fullPage: true });
+          const fatal = errors.filter(text => !/Firebase|auth|network|Failed to fetch/i.test(text));
+          assert.deepEqual(fatal, []);
+          console.log(JSON.stringify(view, null, 2));
+          await browser.close();
+          NODE
+          node /tmp/live.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audit-sync-v9-iphone
+          path: audit-sync-v9-iphone.png
