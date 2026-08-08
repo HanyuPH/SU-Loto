@@ -56,6 +56,8 @@ jobs:
           grep -q '^latestBetaDocumented=v23$' public/beta/VERSION
           grep -q '^walletGames=300$' public/beta/VERSION
           grep -q 'src="bootstrap.js"' public/beta/index.html
+          grep -q 'cloud-sync.js?v=3' public/beta/bootstrap.js
+          grep -q 'su-loto-c2-v23-sync-v5' public/beta/service-worker.js
           grep -q 'persistentLocalCache' public/beta/cloud-sync.js
           grep -q 'persistentMultipleTabManager' public/beta/cloud-sync.js
           grep -q 'su:state-change' public/beta/sync-events.js
@@ -136,8 +138,9 @@ jobs:
 
           fetch_until "$LOTO_BASE/beta/beta-banner.js" 'const BUILD = "v23"' /tmp/loto-banner.js
           fetch_until "$LOTO_BASE/beta/VERSION" 'latestBetaDocumented=v23' /tmp/loto-version.txt
-          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'beta-banner.js?v=23' /tmp/loto-bootstrap.js
-          fetch_until "$LOTO_BASE/beta/service-worker.js" 'su-loto-c2-v23-sync-v3' /tmp/loto-sw.js
+          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'beta-banner.js?v=23' /tmp/loto-bootstrap-banner.js
+          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'cloud-sync.js?v=3' /tmp/loto-bootstrap-sync.js
+          fetch_until "$LOTO_BASE/beta/service-worker.js" 'su-loto-c2-v23-sync-v5' /tmp/loto-sw.js
           fetch_until "$LOTO_BASE/beta/index.html" 'src="bootstrap.js"' /tmp/loto-index.html
           fetch_until "$LOTO_BASE/service-worker.js" 'stable-su-loto-c2-v11' /tmp/loto-stable-sw.js
 
