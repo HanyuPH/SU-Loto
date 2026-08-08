@@ -12,7 +12,7 @@ assert.match(bootstrap, /ios-cloud-shell\.js\?v=1/);
 assert.match(bootstrap, /official-results-live-refresh\.js\?v=1/);
 assert.match(transport, /restOnly: ios/);
 assert.doesNotMatch(transport, /firebase-firestore\.js/);
-assert.match(rest, /documents:commit/);
+assert.match(rest, /firestoreBase\(\)\}:commit/);
 assert.match(rest, /gameStatuses/);
 assert.match(rest, /\/contests/);
 assert.match(rest, /suLotoContestBetsC2/);
