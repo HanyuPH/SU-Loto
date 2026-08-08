@@ -33,6 +33,7 @@ jobs:
 
       - name: Montar e validar site
         run: |
+          set -euo pipefail
           rm -rf public
           mkdir -p public/beta
           rsync -a --exclude='.git/' --exclude='.github/' stable/ public/
@@ -47,7 +48,7 @@ jobs:
           node --check public/service-worker.js
 
           # Beta v23 consolidada em /beta/
-          for file in index.html bootstrap.js firebase-ios-transport.js ios-rest-status-refresh.js sync-events.js app.js service-worker.js official-results.js cloud-sync.js contest-bets.js contest-bets-cloud.js VERSION; do
+          for file in index.html bootstrap.js firebase-ios-transport.js ios-rest-status-refresh.js ios-pwa-sync-coordinator.js sync-events.js app.js service-worker.js official-results.js cloud-sync.js contest-bets.js contest-bets-cloud.js VERSION; do
             test -f "public/beta/$file"
           done
           test -f public/beta/data/carteira-c2/manifest.json
@@ -59,8 +60,16 @@ jobs:
           grep -q 'firebase-ios-transport.js?v=1' public/beta/bootstrap.js
           grep -q 'ios-rest-status-refresh.js?v=1' public/beta/bootstrap.js
           grep -q 'cloud-sync.js?v=3' public/beta/bootstrap.js
-          grep -q 'su-loto-c2-v23-sync-v7' public/beta/service-worker.js
-          grep -q 'ios-rest-status-refresh.js' public/beta/service-worker.js
+          grep -q 'ios-pwa-sync-coordinator.js?v=1' public/beta/bootstrap.js
+
+          BETA_SYNC_BUILD="$(sed -nE 's/^const SERVICE_WORKER_BUILD = "(sync-v[0-9]+)";$/\1/p' public/beta/bootstrap.js | head -1)"
+          test -n "$BETA_SYNC_BUILD"
+          echo "Build de sincronização Beta detectado: $BETA_SYNC_BUILD"
+          grep -Fq "su-loto-c2-v23-${BETA_SYNC_BUILD}" public/beta/service-worker.js
+          grep -Fq 'ios-rest-status-refresh.js' public/beta/service-worker.js
+          grep -Fq 'ios-pwa-sync-coordinator.js' public/beta/service-worker.js
+          grep -Fq "protocol: \"${BETA_SYNC_BUILD}\"" public/beta/ios-pwa-sync-coordinator.js
+
           grep -q 'experimentalForceLongPolling: true' public/beta/firebase-ios-transport.js
           grep -q 'memoryLocalCache' public/beta/firebase-ios-transport.js
           grep -q 'firestore.googleapis.com/v1/projects' public/beta/ios-rest-status-refresh.js
@@ -74,7 +83,7 @@ jobs:
           for legacy in data/games-1.js data/games-2.js data/games-3.js data/games-4.js data/games-5.js data/games-6.js; do
             test ! -e "public/beta/$legacy"
           done
-          for file in bootstrap.js firebase-ios-transport.js ios-rest-status-refresh.js sync-events.js app.js service-worker.js official-results.js cloud-sync.js contest-bets.js contest-bets-cloud.js; do
+          for file in bootstrap.js firebase-ios-transport.js ios-rest-status-refresh.js ios-pwa-sync-coordinator.js sync-events.js app.js service-worker.js official-results.js cloud-sync.js contest-bets.js contest-bets-cloud.js; do
             node --check "public/beta/$file"
           done
           (cd public/beta && node scripts/validate-wallet-data.mjs)
@@ -144,14 +153,26 @@ jobs:
 
           fetch_until "$LOTO_BASE/beta/beta-banner.js" 'const BUILD = "v23"' /tmp/loto-banner.js
           fetch_until "$LOTO_BASE/beta/VERSION" 'latestBetaDocumented=v23' /tmp/loto-version.txt
-          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'beta-banner.js?v=23' /tmp/loto-bootstrap-banner.js
-          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'firebase-ios-transport.js?v=1' /tmp/loto-bootstrap-ios.js
-          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'ios-rest-status-refresh.js?v=1' /tmp/loto-bootstrap-rest.js
-          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'cloud-sync.js?v=3' /tmp/loto-bootstrap-sync.js
+          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'beta-banner.js?v=23' /tmp/loto-bootstrap.js
+          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'const SERVICE_WORKER_BUILD = "sync-v' /tmp/loto-bootstrap.js
+          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'firebase-ios-transport.js?v=1' /tmp/loto-bootstrap.js
+          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'ios-rest-status-refresh.js?v=1' /tmp/loto-bootstrap.js
+          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'cloud-sync.js?v=3' /tmp/loto-bootstrap.js
+          fetch_until "$LOTO_BASE/beta/bootstrap.js" 'ios-pwa-sync-coordinator.js?v=1' /tmp/loto-bootstrap.js
+
+          BETA_SYNC_BUILD="$(sed -nE 's/^const SERVICE_WORKER_BUILD = "(sync-v[0-9]+)";$/\1/p' /tmp/loto-bootstrap.js | head -1)"
+          if [[ ! "$BETA_SYNC_BUILD" =~ ^sync-v[0-9]+$ ]]; then
+            echo "FALHA: não foi possível detectar o build de sincronização publicado." >&2
+            exit 1
+          fi
+          echo "Build de sincronização publicado: $BETA_SYNC_BUILD"
+
           fetch_until "$LOTO_BASE/beta/firebase-ios-transport.js" 'experimentalForceLongPolling: true' /tmp/loto-ios-transport.js
           fetch_until "$LOTO_BASE/beta/ios-rest-status-refresh.js" 'firestore.googleapis.com/v1/projects' /tmp/loto-ios-rest.js
-          fetch_until "$LOTO_BASE/beta/service-worker.js" 'su-loto-c2-v23-sync-v7' /tmp/loto-sw.js
-          fetch_until "$LOTO_BASE/beta/service-worker.js" 'ios-rest-status-refresh.js' /tmp/loto-sw-rest.js
+          fetch_until "$LOTO_BASE/beta/ios-pwa-sync-coordinator.js" "protocol: \"${BETA_SYNC_BUILD}\"" /tmp/loto-ios-pwa.js
+          fetch_until "$LOTO_BASE/beta/service-worker.js" "su-loto-c2-v23-${BETA_SYNC_BUILD}" /tmp/loto-sw.js
+          fetch_until "$LOTO_BASE/beta/service-worker.js" 'ios-rest-status-refresh.js' /tmp/loto-sw.js
+          fetch_until "$LOTO_BASE/beta/service-worker.js" 'ios-pwa-sync-coordinator.js' /tmp/loto-sw.js
           fetch_until "$LOTO_BASE/beta/index.html" 'src="bootstrap.js"' /tmp/loto-index.html
           fetch_until "$LOTO_BASE/service-worker.js" 'stable-su-loto-c2-v11' /tmp/loto-stable-sw.js
 
@@ -162,4 +183,4 @@ jobs:
             "/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
             -f state=success \
             -f context='pages-live-audit' \
-            -f description='SU Loto Beta v23 sync-v7 REST iOS e SU Mega Beta v29 confirmadas no Pages'
+            -f description="SU Loto Beta v23 ${BETA_SYNC_BUILD} e SU Mega Beta v29 confirmadas no Pages"
