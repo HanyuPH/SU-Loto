@@ -6,7 +6,9 @@ import { getFirestore, collection, getDocsFromServer } from "https://www.gstatic
 const APP_INSTANCE = "su-loto-cloud";
 const PROJECT_ID = "su-mega";
 const WALLET = "C2";
-const TIMEOUT_MS = 10000;
+const QA_MODE = new URLSearchParams(location.search).has("qa");
+const TIMEOUT_MS = QA_MODE ? 700 : 10000;
+const AUTH_TIMEOUT_MS = QA_MODE ? 700 : 8000;
 
 const app = getApps().find(item => item.name === APP_INSTANCE);
 if (!app) throw new Error("Instância Firebase SU Loto não encontrada.");
@@ -41,18 +43,20 @@ async function timed(label, operation, ms = TIMEOUT_MS) {
     return { label, ok: false, durationMs: elapsed(started), error: safeError(error) };
   }
 }
-function waitForAuth(ms = 8000) {
+function waitForAuth(ms = AUTH_TIMEOUT_MS) {
   return new Promise(resolve => {
     let done = false;
+    let unsubscribe = null;
+    let timer = null;
     const finish = user => {
       if (done) return;
       done = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       unsubscribe?.();
       resolve(user || null);
     };
-    const unsubscribe = onAuthStateChanged(auth, finish, () => finish(null));
-    const timer = setTimeout(() => finish(auth.currentUser), ms);
+    unsubscribe = onAuthStateChanged(auth, finish, () => finish(null));
+    timer = setTimeout(() => finish(auth.currentUser), ms);
   });
 }
 function collectionRef(uid, domain) {
@@ -162,7 +166,7 @@ async function runDiagnostic() {
     return;
   }
 
-  const tokenResult = await timed("auth-token", () => user.getIdToken(false), 8000);
+  const tokenResult = await timed("auth-token", () => user.getIdToken(false), AUTH_TIMEOUT_MS);
   const token = tokenResult.ok ? tokenResult.value : null;
 
   const sdkStatuses = await timed("sdk-gameStatuses", () => getDocsFromServer(collectionRef(user.uid, "gameStatuses")));
