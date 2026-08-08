@@ -1,0 +1,48 @@
+name: Auditoria live diagnóstico Firestore
+
+on:
+  pull_request:
+    branches: [beta]
+
+permissions:
+  contents: read
+
+jobs:
+  audit-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Conferir diagnóstico publicado no GitHub Pages
+        run: |
+          set -euo pipefail
+          BASE="https://hanyuph.github.io/SU-Loto/beta"
+          audit="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          fetch_until() {
+            local url="$1"
+            local pattern="$2"
+            local out="$3"
+            for attempt in $(seq 1 36); do
+              if curl --fail --silent --show-error --location \
+                --header 'Cache-Control: no-cache' \
+                "${url}?audit=${audit}-${attempt}" -o "$out" \
+                && grep -Fq "$pattern" "$out"; then
+                echo "OK: $url contém $pattern"
+                return 0
+              fi
+              sleep 5
+            done
+            echo "FALHA: $url não apresentou $pattern" >&2
+            test -f "$out" && head -c 1200 "$out" >&2 || true
+            return 1
+          }
+
+          fetch_until "$BASE/diagnostics/firestore.html" 'Diagnóstico Firestore • SU Loto Beta v23' /tmp/diag.html
+          fetch_until "$BASE/diagnostics/firestore-diagnostic.js" 'getDocsFromServer' /tmp/diag.js
+          fetch_until "$BASE/diagnostics/firestore-diagnostic.js" 'firestore.googleapis.com' /tmp/diag-rest.js
+          fetch_until "$BASE/diagnostics/firestore-diagnostic.js" 'REST funciona, mas o SDK Firestore falhou' /tmp/diag-diagnosis.js
+          fetch_until "$BASE/firebase-ios-transport.js" 'experimentalForceLongPolling: true' /tmp/transport.js
+          fetch_until "$BASE/service-worker.js" 'su-loto-c2-v23-sync-v6' /tmp/sw.js
+          fetch_until "$BASE/VERSION" 'latestBetaDocumented=v23' /tmp/version.txt
+
+          echo 'AUDITORIA LIVE DO DIAGNÓSTICO: APROVADA'
