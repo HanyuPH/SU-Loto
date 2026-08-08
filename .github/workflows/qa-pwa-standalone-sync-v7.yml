@@ -1,0 +1,90 @@
+name: QA PWA standalone sync-v7
+
+on:
+  pull_request:
+    branches:
+      - beta
+
+permissions:
+  contents: read
+
+jobs:
+  qa-pwa-standalone:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validar Carteira Oficial C2 e arquivos sync-v7
+        run: |
+          node scripts/validate-wallet-data.mjs
+          node --check ios-rest-status-refresh.js
+          node --check cloud-resume-refresh.js
+          node --check bootstrap.js
+          node --check service-worker.js
+          grep -q 'ios-rest-status-refresh.js?v=1' bootstrap.js
+          grep -q 'su-loto-c2-v23-sync-v7' service-worker.js
+          grep -q 'ios-rest-status-refresh.js' service-worker.js
+
+      - name: Instalar WebKit
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps webkit
+
+      - name: Testar PWA standalone no WebKit iPhone
+        run: |
+          python3 -m http.server 4173 >/tmp/su-loto-pwa-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/tests/ios-rest-fastpath-harness.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/ios-pwa-standalone-sync-v7.mjs
+
+      - name: Auditar GitHub Pages publicado
+        run: |
+          set -euo pipefail
+          base='https://hanyuph.github.io/SU-Loto/beta'
+          check_live() {
+            local path="$1"
+            local pattern="$2"
+            local output="$3"
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --show-error --location \
+                --header 'Cache-Control: no-cache' \
+                "$base/$path?audit=${GITHUB_RUN_ID}-${attempt}" -o "$output" \
+                && grep -Fq "$pattern" "$output"; then
+                echo "OK: $path contém $pattern"
+                return 0
+              fi
+              sleep 5
+            done
+            echo "FALHA LIVE: $path não contém $pattern" >&2
+            return 1
+          }
+          check_live 'VERSION' 'latestBetaDocumented=v23' /tmp/version.txt
+          check_live 'bootstrap.js' 'ios-rest-status-refresh.js?v=1' /tmp/bootstrap.js
+          check_live 'ios-rest-status-refresh.js' 'firestore.googleapis.com/v1/projects' /tmp/rest.js
+          check_live 'service-worker.js' 'su-loto-c2-v23-sync-v7' /tmp/sw.js
+          check_live 'service-worker.js' 'ios-rest-status-refresh.js' /tmp/sw-rest.js
+
+      - name: Confirmar escopo temporário
+        run: |
+          git fetch origin beta
+          changed="$(git diff --name-only origin/beta...HEAD)"
+          printf '%s\n' "$changed"
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^(.github/workflows/qa-pwa-standalone-sync-v7.yml|tests/ios-pwa-standalone-sync-v7.mjs)$' || true)"
+          if test -n "$unexpected"; then
+            echo 'QA falhou: auditoria temporária alterou arquivos fora do escopo:' >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          fi
