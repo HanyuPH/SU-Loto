@@ -1,0 +1,44 @@
+name: Auditoria temporária direct-status-poll publicado
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Validar direct-poll e preservações no Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          loto="https://hanyuph.github.io/SU-Loto"
+          mega="https://hanyuph.github.io/SU-Mega"
+          ok=0
+          for i in $(seq 1 40); do
+            q="${GITHUB_RUN_ID}-${i}"
+            curl -fsSL --max-time 15 "$loto/beta/ios-rest-operational-sync.js?audit=$q" -o /tmp/sync.js || true
+            curl -fsSL --max-time 15 "$loto/beta/beta-banner.js?audit=$q" -o /tmp/banner.js || true
+            curl -fsSL --max-time 15 "$loto/beta/data/ultimo-concurso.json?audit=$q" -o /tmp/result.json || true
+            curl -fsSL --max-time 15 "$loto/VERSION?audit=$q" -o /tmp/stable-version || true
+            curl -fsSL --max-time 15 "$mega/beta/beta-banner.js?audit=$q" -o /tmp/mega-banner.js || true
+            if grep -Fq 'hotfix: "direct-status-poll-3"' /tmp/sync.js 2>/dev/null \
+              && grep -Fq 'const STATUS_POLL_MS = 2500' /tmp/sync.js 2>/dev/null \
+              && grep -Fq 'setInterval(() => { void pollStatuses(); }, STATUS_POLL_MS)' /tmp/sync.js 2>/dev/null \
+              && ! grep -Fq 'syncMeta/state' /tmp/sync.js 2>/dev/null \
+              && ! grep -Fq 'ios-safari-pwa-catchup' /tmp/banner.js 2>/dev/null \
+              && grep -Eq '"number"[[:space:]]*:[[:space:]]*3756' /tmp/result.json 2>/dev/null \
+              && grep -Fq 'stableVersion=v11' /tmp/stable-version 2>/dev/null \
+              && grep -Fq 'const BUILD = "v29"' /tmp/mega-banner.js 2>/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ok" -eq 1
+          echo "Direct-status-poll confirmado no Pages; syncMeta ausente; 3756, v11 e SU Mega v29 preservados."
