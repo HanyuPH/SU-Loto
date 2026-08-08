@@ -114,6 +114,18 @@ if (channel) {
 
 globalThis.SULotoSyncEvents?.subscribe?.(broadcastLocalStatus);
 
+async function refreshStatuses(reason) {
+  const iosRest = globalThis.SULotoIOSRestStatus;
+  if (iosRest?.active) {
+    // O diagnóstico real no iPhone mostrou que a leitura dos 300 status pelo
+    // SDK pode levar vários segundos, enquanto HTTPS/REST responde rapidamente.
+    // No iOS, delegamos a leitura de retomada ao fast path determinístico, que
+    // também aplica o resultado imediatamente na interface.
+    return iosRest.refreshNow(`resume-${reason}`);
+  }
+  return getDocsFromServer(statusesCollection(currentUser.uid));
+}
+
 async function refreshRemote(reason = "manual", { force = false } = {}) {
   if (!currentUser || !navigator.onLine) return false;
 
@@ -125,25 +137,25 @@ async function refreshRemote(reason = "manual", { force = false } = {}) {
   lastRefreshReason = reason;
 
   refreshPromise = (async () => {
-    // Safari/PWA pode manter a instância do Firestore viva ao voltar do segundo
-    // plano. Reabilitar a rede e forçar uma leitura do servidor faz o listener
-    // existente receber rapidamente o estado mais recente sem bloquear a UI.
     try { await enableNetwork(db); } catch {}
 
     const [statuses, contests] = await Promise.allSettled([
-      getDocsFromServer(statusesCollection(currentUser.uid)),
+      refreshStatuses(reason),
       getDocsFromServer(contestsCollection(currentUser.uid))
     ]);
 
     lastRefreshFinishedAt = Date.now();
-    const ok = statuses.status === "fulfilled" || contests.status === "fulfilled";
+    const statusOk = statuses.status === "fulfilled" && statuses.value !== false;
+    const contestsOk = contests.status === "fulfilled";
+    const ok = statusOk || contestsOk;
 
     window.dispatchEvent(new CustomEvent("su:loto-cloud-refresh", {
       detail: {
         reason,
         ok,
-        statuses: statuses.status,
-        contests: contests.status,
+        statuses: statusOk ? "fulfilled" : "rejected",
+        contests: contestsOk ? "fulfilled" : "rejected",
+        statusTransport: globalThis.SULotoIOSRestStatus?.active ? "rest-ios" : "firestore-sdk",
         durationMs: lastRefreshFinishedAt - lastRefreshStartedAt,
         at: new Date(lastRefreshFinishedAt).toISOString()
       }
@@ -194,6 +206,7 @@ globalThis.SULotoRealtimeBoost = Object.freeze({
     lastRefreshReason,
     refreshing: Boolean(refreshPromise),
     online: navigator.onLine,
-    visibility: document.visibilityState
+    visibility: document.visibilityState,
+    statusTransport: globalThis.SULotoIOSRestStatus?.active ? "rest-ios" : "firestore-sdk"
   })
 });
