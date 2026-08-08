@@ -8,11 +8,14 @@ const STATUS_KEY = "su-loto-c2-status-v4";
 const CONTEST_KEY = "su-loto-c2-contests-v1";
 const BETS_KEY = "su-loto-c2-contest-bets-v1";
 const PENDING_KEY = "su-loto-c2-pending-status-rest-v1";
+const CONTEST_DIRTY_KEY = "su-loto-c2-contests-dirty-rest-v1";
+const BETS_DIRTY_KEY = "su-loto-c2-bets-dirty-rest-v1";
 const DEVICE_KEY = "su-ecosystem-device-id";
 const DEVICE_NAME_KEY = "su-loto-device-name";
 const LAST_SYNC_KEY = "su-loto-c2-rest-last-sync-v1";
 const VALID = new Set(["pendente", "registrado", "apostado"]);
-const POLL_MS = 2000;
+const STATUS_POLL_MS = 2500;
+const FULL_POLL_MS = 12000;
 const REQUEST_TIMEOUT_MS = 7000;
 const transport = globalThis.SULotoFirestoreTransport || {};
 const active = Boolean(transport.ios && transport.restOnly);
@@ -20,81 +23,700 @@ const active = Boolean(transport.ios && transport.restOnly);
 const firebaseApp = getApps().find(item => item.name === APP_INSTANCE);
 if (!firebaseApp) throw new Error("SU Loto: Firebase não inicializado antes do sincronizador REST.");
 const auth = getAuth(firebaseApp);
+
 let currentUser = null;
-let polling = null;
+let statusPolling = null;
+let fullPolling = null;
 let syncing = null;
+let statusPulling = null;
 let statusWriteTimer = null;
 let contestsWriteTimer = null;
 let betsWriteTimer = null;
 let applyingRemote = false;
-let knownMeta = { statusRevision: null, contestsRevision: null, contestBetsRevision: null };
 let ready = { statuses: false, contests: false, contestBets: false };
 let lastError = null;
 let channel = null;
+let lastStatusPollAt = null;
+let lastFullPollAt = null;
 
-function parse(raw, fallback) { try { return JSON.parse(raw ?? ""); } catch { return fallback; } }
-function deviceId() { let id = localStorage.getItem(DEVICE_KEY); if (!id) { id = crypto.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(36).slice(2)}`; localStorage.setItem(DEVICE_KEY, id); } return id; }
-function deviceName() { return localStorage.getItem(DEVICE_NAME_KEY) || (/iPad/i.test(navigator.userAgent) ? "iPad" : /iPhone/i.test(navigator.userAgent) ? "iPhone" : "Safari"); }
-function revision() { return `${Date.now()}-${deviceId()}-${Math.random().toString(36).slice(2, 8)}`; }
-function emitState(kind, text, extra = {}) { const detail = { kind, text, at: new Date().toISOString(), lastSync: localStorage.getItem(LAST_SYNC_KEY) || null, ready: { ...ready }, error: lastError, ...extra }; window.dispatchEvent(new CustomEvent("su:loto-rest-sync-state", { detail })); }
-function markSynced(text = "Sincronizado") { const at = new Date().toISOString(); localStorage.setItem(LAST_SYNC_KEY, at); lastError = null; emitState("synced", text, { lastSync: at }); }
-function allReady() { return ready.statuses && ready.contests && ready.contestBets; }
-function maybeSynced(text = "Sincronizado") { if (allReady()) markSynced(text); else emitState("saving", "Sincronizando dados…"); }
-function firestoreBase() { return `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`; }
-function documentName(path) { return `projects/${PROJECT_ID}/databases/(default)/documents/${path}`; }
-async function token() { if (!currentUser) throw new Error("Usuário não autenticado."); return currentUser.getIdToken(false); }
-async function request(url, options = {}) { const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS); try { const idToken = await token(); const response = await fetch(url, { cache: "no-store", ...options, signal: controller.signal, headers: { Authorization: `Bearer ${idToken}`, Accept: "application/json", "Content-Type": "application/json", "Cache-Control": "no-cache", ...(options.headers || {}) } }); let body = null; try { body = await response.json(); } catch {} if (!response.ok) { const error = new Error(`Firestore REST HTTP ${response.status}${body?.error?.status ? ` • ${body.error.status}` : ""}`); error.code = body?.error?.status || `http/${response.status}`; error.httpStatus = response.status; throw error; } return body; } finally { clearTimeout(timeout); } }
-function toValue(value) { if (value === null || value === undefined) return { nullValue: null }; if (typeof value === "boolean") return { booleanValue: value }; if (typeof value === "number") return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value }; if (typeof value === "string") return { stringValue: value }; if (Array.isArray(value)) return { arrayValue: { values: value.map(toValue) } }; if (typeof value === "object") return { mapValue: { fields: Object.fromEntries(Object.entries(value).map(([key, item]) => [key, toValue(item)])) } }; return { stringValue: String(value) }; }
-function fromValue(value) { if (!value || typeof value !== "object") return null; if (Object.hasOwn(value, "nullValue")) return null; if (Object.hasOwn(value, "booleanValue")) return Boolean(value.booleanValue); if (Object.hasOwn(value, "integerValue")) return Number(value.integerValue); if (Object.hasOwn(value, "doubleValue")) return Number(value.doubleValue); if (Object.hasOwn(value, "timestampValue")) return String(value.timestampValue); if (Object.hasOwn(value, "stringValue")) return String(value.stringValue); if (value.arrayValue) return (value.arrayValue.values || []).map(fromValue); if (value.mapValue) return Object.fromEntries(Object.entries(value.mapValue.fields || {}).map(([key, item]) => [key, fromValue(item)])); return null; }
-function fieldsToObject(fields) { return Object.fromEntries(Object.entries(fields || {}).map(([key, value]) => [key, fromValue(value)])); }
-async function fetchCollection(path, pageSize = 500) { const documents = []; let pageToken = null; let pages = 0; do { pages += 1; if (pages > 10) throw new Error(`Paginação inesperada em ${path}.`); const params = new URLSearchParams({ pageSize: String(pageSize) }); if (pageToken) params.set("pageToken", pageToken); const body = await request(`${firestoreBase()}/${path}?${params}`); documents.push(...(Array.isArray(body?.documents) ? body.documents : [])); pageToken = body?.nextPageToken || null; } while (pageToken); return documents; }
-async function fetchDocument(path) { try { return await request(`${firestoreBase()}/${path}`); } catch (error) { if (error.httpStatus === 404) return null; throw error; } }
-async function commit(writes) { if (!writes.length) return null; return request(`${firestoreBase()}:commit`, { method: "POST", body: JSON.stringify({ writes }) }); }
-function metaWrite(fields) { const mapped = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, toValue(value)])); return { update: { name: documentName(`users/${currentUser.uid}/suLoto/${WALLET}/syncMeta/state`), fields: mapped }, updateMask: { fieldPaths: Object.keys(mapped) } }; }
-function localStatuses() { const payload = parse(localStorage.getItem(STATUS_KEY), {}); const source = payload?.statuses || payload || {}; const output = {}; for (const game of globalThis.SU_LOTO_GAMES || []) { const id = String(game.id); output[id] = VALID.has(source[id]) ? source[id] : "pendente"; } return output; }
-function pendingStatuses() { const raw = parse(localStorage.getItem(PENDING_KEY), {}); const output = {}; for (const [id, row] of Object.entries(raw && typeof raw === "object" ? raw : {})) { const status = typeof row === "string" ? row : row?.status; if (VALID.has(status)) output[id] = status; } return output; }
-function persistPending(next) { const payload = {}; const now = new Date().toISOString(); for (const [id, status] of Object.entries(next)) if (VALID.has(status)) payload[id] = { status, at: now }; localStorage.setItem(PENDING_KEY, JSON.stringify(payload)); }
-function rememberPending(id, status) { if (!id || !VALID.has(status)) return; const next = pendingStatuses(); next[String(id)] = status; persistPending(next); }
-function confirmPending(ids) { const next = pendingStatuses(); let changed = false; for (const id of ids) if (Object.hasOwn(next, String(id))) { delete next[String(id)]; changed = true; } if (changed) persistPending(next); }
-function statusPayload(statuses, savedAt) { return { app: "SU Loto", wallet: WALLET, schema: 4, source: "firestore-rest-ios-v9", walletLogicalSha256: globalThis.SU_LOTO_WALLET_MANIFEST?.source?.registeredWalletLogicalSha256 || null, savedAt, statuses }; }
-function applyStatuses(remoteStatuses, remoteIds) { const current = localStatuses(); const pending = pendingStatuses(); const merged = {}; for (const game of globalThis.SU_LOTO_GAMES || []) { const id = String(game.id); if (VALID.has(pending[id])) merged[id] = pending[id]; else if (remoteIds.has(id) && VALID.has(remoteStatuses[id])) merged[id] = remoteStatuses[id]; else if (VALID.has(current[id]) && current[id] !== "pendente") merged[id] = current[id]; else merged[id] = "pendente"; } const value = JSON.stringify(statusPayload(merged, new Date().toISOString())); applyingRemote = true; try { localStorage.setItem(STATUS_KEY, value); globalThis.SULotoApp?.refreshFromStorage?.(); window.dispatchEvent(new StorageEvent("storage", { key: STATUS_KEY, newValue: value })); } finally { applyingRemote = false; } }
-async function pullStatuses() { const path = `users/${encodeURIComponent(currentUser.uid)}/suLoto/${WALLET}/gameStatuses`; const documents = await fetchCollection(path, 500); const allowed = new Set((globalThis.SU_LOTO_GAMES || []).map(game => String(game.id))); const remote = {}; const remoteIds = new Set(); for (const document of documents) { const id = decodeURIComponent(String(document.name || "").split("/").pop() || ""); const status = fromValue(document.fields?.status); if (allowed.has(id) && VALID.has(status)) { remote[id] = status; remoteIds.add(id); } } applyStatuses(remote, remoteIds); ready.statuses = true; return { count: remoteIds.size }; }
-function normalizeContests(input) { const source = Array.isArray(input) ? input : []; const seen = new Set(); const output = []; for (const item of source) { const number = Number(item?.number); const numbers = Array.isArray(item?.numbers) ? [...new Set(item.numbers.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 25))].sort((a, b) => a - b) : []; if (!Number.isInteger(number) || number < 1 || numbers.length !== 15 || seen.has(number)) continue; seen.add(number); output.push({ number, date: String(item?.date || ""), numbers, source: String(item?.source || ""), notes: String(item?.notes || ""), createdAt: String(item?.createdAt || ""), updatedAt: String(item?.updatedAt || item?.createdAt || "") }); } return output.sort((a, b) => b.number - a.number); }
-function localContests() { try { if (globalThis.SULotoContests?.exportData) return normalizeContests(globalThis.SULotoContests.exportData()); } catch {} return normalizeContests(parse(localStorage.getItem(CONTEST_KEY), [])); }
-function contestTime(item) { const value = new Date(item?.updatedAt || item?.createdAt || 0).getTime(); return Number.isFinite(value) ? value : 0; }
-function mergeContests(local, remote) { const map = new Map(); for (const item of remote) map.set(item.number, item); for (const item of local) { const previous = map.get(item.number); if (!previous || contestTime(item) >= contestTime(previous)) map.set(item.number, item); } return normalizeContests([...map.values()]); }
-function applyContests(contests) { const normalized = normalizeContests(contests); applyingRemote = true; try { if (globalThis.SULotoContests?.importData) globalThis.SULotoContests.importData(normalized, true); else { const value = JSON.stringify(normalized); localStorage.setItem(CONTEST_KEY, value); window.dispatchEvent(new StorageEvent("storage", { key: CONTEST_KEY, newValue: value })); } } finally { applyingRemote = false; } }
-async function pullContests() { const path = `users/${encodeURIComponent(currentUser.uid)}/suLoto/${WALLET}/contests`; const documents = await fetchCollection(path, 200); const remote = normalizeContests(documents.map(document => { const data = fieldsToObject(document.fields); return { number: Number(data.number ?? String(document.name || "").split("/").pop()), date: data.date, numbers: data.numbers, source: data.source, notes: data.notes, createdAt: data.createdAt, updatedAt: data.updatedAt }; })); const merged = mergeContests(localContests(), remote); applyContests(merged); ready.contests = true; return { remote, merged }; }
-function normalizeBetRecords(value) { const source = value && typeof value === "object" && !Array.isArray(value) ? value : {}; const output = {}; for (const [key, row] of Object.entries(source)) { const contest = Number(row?.contest ?? key); if (!Number.isInteger(contest) || contest < 1) continue; const savedAt = String(row?.savedAt || new Date(0).toISOString()); output[String(contest)] = { contest, type: row?.type === "especial" ? "especial" : "normal", specialName: String(row?.specialName || ""), status: row?.status === "concluido" ? "concluido" : "ativo", gameIds: Array.isArray(row?.gameIds) ? row.gameIds.map(String) : [], unitPrice: Math.max(0, Number(row?.unitPrice) || 0), totalInvested: Math.max(0, Number(row?.totalInvested) || 0), createdAt: String(row?.createdAt || savedAt), savedAt, updatedAt: String(row?.updatedAt || row?.concludedAt || savedAt), concludedAt: String(row?.concludedAt || ""), releaseStatus: row?.releaseStatus === "registrado" ? "registrado" : "pendente" }; } return output; }
-function localBetRecords() { return normalizeBetRecords(parse(localStorage.getItem(BETS_KEY), {})); }
-function betTime(row) { const value = new Date(row?.updatedAt || row?.concludedAt || row?.savedAt || 0).getTime(); return Number.isFinite(value) ? value : 0; }
-function mergeBetRecords(local, remote) { const output = {}; const keys = new Set([...Object.keys(local), ...Object.keys(remote)]); for (const key of keys) { const a = local[key]; const b = remote[key]; output[key] = !a ? b : !b ? a : (betTime(a) >= betTime(b) ? a : b); } return normalizeBetRecords(output); }
-function applyBetRecords(records) { const normalized = normalizeBetRecords(records); applyingRemote = true; try { localStorage.setItem(BETS_KEY, JSON.stringify(normalized)); window.dispatchEvent(new CustomEvent("su:contest-bets-cloud-updated", { detail: normalized })); } finally { applyingRemote = false; } }
-async function pullContestBets() { const document = await fetchDocument(`users/${encodeURIComponent(currentUser.uid)}/settings/suLotoContestBetsC2`); const remote = document ? normalizeBetRecords(fromValue(document.fields?.records) || {}) : {}; const merged = mergeBetRecords(localBetRecords(), remote); applyBetRecords(merged); ready.contestBets = true; return { remote, merged }; }
-async function readMeta() { const document = await fetchDocument(`users/${encodeURIComponent(currentUser.uid)}/suLoto/${WALLET}/syncMeta/state`); const fields = fieldsToObject(document?.fields || {}); return { statusRevision: fields.statusRevision || null, contestsRevision: fields.contestsRevision || null, contestBetsRevision: fields.contestBetsRevision || null }; }
-async function writePendingStatuses() { const pending = pendingStatuses(); const entries = Object.entries(pending).filter(([, status]) => VALID.has(status)); if (!entries.length) return false; emitState("saving", "Salvando jogos…"); const rev = revision(); const now = new Date().toISOString(); const writes = entries.map(([id, status]) => ({ update: { name: documentName(`users/${currentUser.uid}/suLoto/${WALLET}/gameStatuses/${id}`), fields: { status: toValue(status), wallet: toValue(WALLET), updatedAtClient: { timestampValue: now }, updatedBy: toValue(deviceId()), deviceName: toValue(deviceName()) } } })); writes.push(metaWrite({ statusRevision: rev, statusUpdatedAt: now, updatedBy: deviceId() })); await commit(writes); confirmPending(entries.map(([id]) => id)); knownMeta.statusRevision = rev; channel?.postMessage?.({ domain: "statuses", revision: rev }); return true; }
-async function pushContests(contests = localContests()) { const normalized = normalizeContests(contests); const path = `users/${encodeURIComponent(currentUser.uid)}/suLoto/${WALLET}/contests`; const remoteDocuments = await fetchCollection(path, 200); const remoteIds = new Set(remoteDocuments.map(document => decodeURIComponent(String(document.name || "").split("/").pop() || ""))); const nextIds = new Set(normalized.map(item => String(item.number))); const writes = []; for (const item of normalized) writes.push({ update: { name: documentName(`users/${currentUser.uid}/suLoto/${WALLET}/contests/${item.number}`), fields: Object.fromEntries(Object.entries({ ...item, wallet: WALLET, updatedBy: deviceId() }).map(([key, value]) => [key, toValue(value)])) } }); for (const id of remoteIds) if (!nextIds.has(id)) writes.push({ delete: documentName(`users/${currentUser.uid}/suLoto/${WALLET}/contests/${id}`) }); const rev = revision(); const now = new Date().toISOString(); writes.push(metaWrite({ contestsRevision: rev, contestsUpdatedAt: now, updatedBy: deviceId() })); await commit(writes); knownMeta.contestsRevision = rev; channel?.postMessage?.({ domain: "contests", revision: rev }); return true; }
-async function pushContestBets(records = localBetRecords()) { const rev = revision(); const now = new Date().toISOString(); const writes = [{ update: { name: documentName(`users/${currentUser.uid}/settings/suLotoContestBetsC2`), fields: { app: toValue("SU Loto"), wallet: toValue(WALLET), records: toValue(normalizeBetRecords(records)), updatedAtClient: { timestampValue: now }, updatedBy: toValue(deviceId()) } } }, metaWrite({ contestBetsRevision: rev, contestBetsUpdatedAt: now, updatedBy: deviceId() })]; await commit(writes); knownMeta.contestBetsRevision = rev; channel?.postMessage?.({ domain: "contestBets", revision: rev }); return true; }
-async function syncAll(reason = "manual") { if (!active || !currentUser || !navigator.onLine) return false; if (syncing) return syncing; syncing = (async () => { emitState("saving", reason === "login" ? "Conectando à nuvem…" : "Atualizando dados…"); try { const [statusResult, contestResult, betsResult, meta] = await Promise.all([pullStatuses(), pullContests(), pullContestBets(), readMeta().catch(() => knownMeta)]); knownMeta = { ...knownMeta, ...meta }; if (Object.keys(pendingStatuses()).length) await writePendingStatuses(); if (JSON.stringify(normalizeContests(contestResult.remote)) !== JSON.stringify(normalizeContests(contestResult.merged))) await pushContests(contestResult.merged); if (JSON.stringify(normalizeBetRecords(betsResult.remote)) !== JSON.stringify(normalizeBetRecords(betsResult.merged))) await pushContestBets(betsResult.merged); ready = { statuses: true, contests: true, contestBets: true }; markSynced("Sincronizado"); return { ok: true, statuses: statusResult.count, contests: contestResult.merged.length, contestBets: Object.keys(betsResult.merged).length }; } catch (error) { lastError = { code: String(error?.code || error?.name || "error"), message: String(error?.message || error) }; emitState(navigator.onLine ? "error" : "offline", navigator.onLine ? "Falha na sincronização" : "Offline • alterações em espera"); console.error("SU Loto REST iOS sync:", error); return { ok: false, error: lastError }; } })().finally(() => { syncing = null; }); return syncing; }
-async function pollMeta() { if (!active || !currentUser || !navigator.onLine || document.visibilityState === "hidden" || syncing) return; try { const meta = await readMeta(); const tasks = []; if (meta.statusRevision && meta.statusRevision !== knownMeta.statusRevision) tasks.push(pullStatuses().then(() => { knownMeta.statusRevision = meta.statusRevision; })); if (meta.contestsRevision && meta.contestsRevision !== knownMeta.contestsRevision) tasks.push(pullContests().then(() => { knownMeta.contestsRevision = meta.contestsRevision; })); if (meta.contestBetsRevision && meta.contestBetsRevision !== knownMeta.contestBetsRevision) tasks.push(pullContestBets().then(() => { knownMeta.contestBetsRevision = meta.contestBetsRevision; })); if (tasks.length) { await Promise.all(tasks); maybeSynced("Sincronizado"); } } catch (error) { lastError = { code: String(error?.code || error?.name || "error"), message: String(error?.message || error) }; } }
-function startPolling() { clearInterval(polling); if (!active || !currentUser) return; polling = setInterval(() => { void pollMeta(); }, POLL_MS); }
-function scheduleStatusWrite(id, status) { rememberPending(String(id || ""), status); clearTimeout(statusWriteTimer); statusWriteTimer = setTimeout(() => { if (!currentUser || !navigator.onLine) return; void writePendingStatuses().then(() => maybeSynced("Sincronizado")).catch(error => { lastError = { code: String(error?.code || error?.name || "error"), message: String(error?.message || error) }; emitState("error", "Falha ao salvar jogo"); }); }, 100); }
-function scheduleContestsWrite() { clearTimeout(contestsWriteTimer); contestsWriteTimer = setTimeout(() => { if (!currentUser || !navigator.onLine) return; emitState("saving", "Salvando concursos…"); void pushContests().then(() => maybeSynced("Sincronizado")).catch(error => { lastError = { code: String(error?.code || error?.name || "error"), message: String(error?.message || error) }; emitState("error", "Falha ao salvar concursos"); }); }, 180); }
-function scheduleBetsWrite() { clearTimeout(betsWriteTimer); betsWriteTimer = setTimeout(() => { if (!currentUser || !navigator.onLine) return; emitState("saving", "Salvando apostas do concurso…"); void pushContestBets().then(() => maybeSynced("Sincronizado")).catch(error => { lastError = { code: String(error?.code || error?.name || "error"), message: String(error?.message || error) }; emitState("error", "Falha ao salvar apostas do concurso"); }); }, 180); }
+function parse(raw, fallback) {
+  try { return JSON.parse(raw ?? ""); }
+  catch { return fallback; }
+}
+
+function deviceId() {
+  let id = localStorage.getItem(DEVICE_KEY);
+  if (!id) {
+    id = crypto.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(DEVICE_KEY, id);
+  }
+  return id;
+}
+
+function deviceName() {
+  return localStorage.getItem(DEVICE_NAME_KEY)
+    || (/iPad/i.test(navigator.userAgent) ? "iPad" : /iPhone/i.test(navigator.userAgent) ? "iPhone" : "Safari");
+}
+
+function emitState(kind, text, extra = {}) {
+  const detail = {
+    kind,
+    text,
+    at: new Date().toISOString(),
+    lastSync: localStorage.getItem(LAST_SYNC_KEY) || null,
+    ready: { ...ready },
+    error: lastError,
+    source: "ios-rest-direct-poll",
+    ...extra
+  };
+  window.dispatchEvent(new CustomEvent("su:loto-rest-sync-state", { detail }));
+}
+
+function markSynced(text = "Sincronizado") {
+  const at = new Date().toISOString();
+  localStorage.setItem(LAST_SYNC_KEY, at);
+  lastError = null;
+  emitState("synced", text, { lastSync: at, error: null });
+}
+
+function allReady() {
+  return ready.statuses && ready.contests && ready.contestBets;
+}
+
+function maybeSynced(text = "Sincronizado") {
+  if (allReady() && !Object.keys(pendingStatuses()).length && !isDirty(CONTEST_DIRTY_KEY) && !isDirty(BETS_DIRTY_KEY)) {
+    markSynced(text);
+  }
+}
+
+function setError(domain, error, text = "Falha na sincronização", notify = true) {
+  lastError = {
+    domain,
+    code: String(error?.code || error?.name || "error"),
+    message: String(error?.message || error)
+  };
+  if (notify) emitState(navigator.onLine ? "error" : "offline", navigator.onLine ? text : "Offline • alterações em espera");
+}
+
+function firestoreBase() {
+  return `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+}
+
+function documentName(path) {
+  return `projects/${PROJECT_ID}/databases/(default)/documents/${path}`;
+}
+
+async function token() {
+  if (!currentUser) throw Object.assign(new Error("Usuário não autenticado."), { code: "auth/not-authenticated" });
+  return currentUser.getIdToken(false);
+}
+
+async function request(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const idToken = await token();
+    const response = await fetch(url, {
+      cache: "no-store",
+      ...options,
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        ...(options.headers || {})
+      }
+    });
+    let body = null;
+    try { body = await response.json(); } catch {}
+    if (!response.ok) {
+      const error = new Error(`Firestore REST HTTP ${response.status}${body?.error?.status ? ` • ${body.error.status}` : ""}`);
+      error.code = body?.error?.status || `http/${response.status}`;
+      error.httpStatus = response.status;
+      throw error;
+    }
+    return body;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function toValue(value) {
+  if (value === null || value === undefined) return { nullValue: null };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
+  if (typeof value === "string") return { stringValue: value };
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(toValue) } };
+  if (typeof value === "object") return { mapValue: { fields: Object.fromEntries(Object.entries(value).map(([key, item]) => [key, toValue(item)])) } };
+  return { stringValue: String(value) };
+}
+
+function fromValue(value) {
+  if (!value || typeof value !== "object") return null;
+  if (Object.hasOwn(value, "nullValue")) return null;
+  if (Object.hasOwn(value, "booleanValue")) return Boolean(value.booleanValue);
+  if (Object.hasOwn(value, "integerValue")) return Number(value.integerValue);
+  if (Object.hasOwn(value, "doubleValue")) return Number(value.doubleValue);
+  if (Object.hasOwn(value, "timestampValue")) return String(value.timestampValue);
+  if (Object.hasOwn(value, "stringValue")) return String(value.stringValue);
+  if (value.arrayValue) return (value.arrayValue.values || []).map(fromValue);
+  if (value.mapValue) return Object.fromEntries(Object.entries(value.mapValue.fields || {}).map(([key, item]) => [key, fromValue(item)]));
+  return null;
+}
+
+function fieldsToObject(fields) {
+  return Object.fromEntries(Object.entries(fields || {}).map(([key, value]) => [key, fromValue(value)]));
+}
+
+async function fetchCollection(path, pageSize = 500) {
+  const documents = [];
+  let pageToken = null;
+  let pages = 0;
+  do {
+    pages += 1;
+    if (pages > 10) throw new Error(`Paginação inesperada em ${path}.`);
+    const params = new URLSearchParams({ pageSize: String(pageSize) });
+    if (pageToken) params.set("pageToken", pageToken);
+    const body = await request(`${firestoreBase()}/${path}?${params}`);
+    documents.push(...(Array.isArray(body?.documents) ? body.documents : []));
+    pageToken = body?.nextPageToken || null;
+  } while (pageToken);
+  return documents;
+}
+
+async function fetchDocument(path) {
+  try { return await request(`${firestoreBase()}/${path}`); }
+  catch (error) {
+    if (error.httpStatus === 404) return null;
+    throw error;
+  }
+}
+
+async function commit(writes) {
+  if (!writes.length) return null;
+  return request(`${firestoreBase()}:commit`, {
+    method: "POST",
+    body: JSON.stringify({ writes })
+  });
+}
+
+function localStatuses() {
+  const payload = parse(localStorage.getItem(STATUS_KEY), {});
+  const source = payload?.statuses || payload || {};
+  const output = {};
+  for (const game of globalThis.SU_LOTO_GAMES || []) {
+    const id = String(game.id);
+    output[id] = VALID.has(source[id]) ? source[id] : "pendente";
+  }
+  return output;
+}
+
+function pendingStatuses() {
+  const raw = parse(localStorage.getItem(PENDING_KEY), {});
+  const output = {};
+  for (const [id, row] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
+    const status = typeof row === "string" ? row : row?.status;
+    if (VALID.has(status)) output[id] = status;
+  }
+  return output;
+}
+
+function persistPending(next) {
+  const payload = {};
+  const now = new Date().toISOString();
+  for (const [id, status] of Object.entries(next)) {
+    if (VALID.has(status)) payload[id] = { status, at: now };
+  }
+  localStorage.setItem(PENDING_KEY, JSON.stringify(payload));
+}
+
+function rememberPending(id, status) {
+  if (!id || !VALID.has(status)) return;
+  const next = pendingStatuses();
+  next[String(id)] = status;
+  persistPending(next);
+}
+
+function confirmPending(ids) {
+  const next = pendingStatuses();
+  let changed = false;
+  for (const id of ids) {
+    if (Object.hasOwn(next, String(id))) {
+      delete next[String(id)];
+      changed = true;
+    }
+  }
+  if (changed) persistPending(next);
+}
+
+function statusPayload(statuses, savedAt) {
+  return {
+    app: "SU Loto",
+    wallet: WALLET,
+    schema: 4,
+    source: "firestore-rest-ios-direct-poll",
+    walletLogicalSha256: globalThis.SU_LOTO_WALLET_MANIFEST?.source?.registeredWalletLogicalSha256 || null,
+    savedAt,
+    statuses
+  };
+}
+
+function applyStatuses(remoteStatuses, remoteIds) {
+  const current = localStatuses();
+  const pending = pendingStatuses();
+  const merged = {};
+  for (const game of globalThis.SU_LOTO_GAMES || []) {
+    const id = String(game.id);
+    if (VALID.has(pending[id])) merged[id] = pending[id];
+    else if (remoteIds.has(id) && VALID.has(remoteStatuses[id])) merged[id] = remoteStatuses[id];
+    else if (VALID.has(current[id]) && current[id] !== "pendente") merged[id] = current[id];
+    else merged[id] = "pendente";
+  }
+  const value = JSON.stringify(statusPayload(merged, new Date().toISOString()));
+  applyingRemote = true;
+  try {
+    localStorage.setItem(STATUS_KEY, value);
+    globalThis.SULotoApp?.refreshFromStorage?.();
+    window.dispatchEvent(new StorageEvent("storage", { key: STATUS_KEY, newValue: value }));
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+async function pullStatuses() {
+  const path = `users/${encodeURIComponent(currentUser.uid)}/suLoto/${WALLET}/gameStatuses`;
+  const documents = await fetchCollection(path, 500);
+  const allowed = new Set((globalThis.SU_LOTO_GAMES || []).map(game => String(game.id)));
+  const remote = {};
+  const remoteIds = new Set();
+  for (const document of documents) {
+    const id = decodeURIComponent(String(document.name || "").split("/").pop() || "");
+    const status = fromValue(document.fields?.status);
+    if (allowed.has(id) && VALID.has(status)) {
+      remote[id] = status;
+      remoteIds.add(id);
+    }
+  }
+  applyStatuses(remote, remoteIds);
+  ready.statuses = true;
+  lastStatusPollAt = new Date().toISOString();
+  return { count: remoteIds.size };
+}
+
+function normalizeContests(input) {
+  const source = Array.isArray(input) ? input : [];
+  const seen = new Set();
+  const output = [];
+  for (const item of source) {
+    const number = Number(item?.number);
+    const numbers = Array.isArray(item?.numbers)
+      ? [...new Set(item.numbers.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 25))].sort((a, b) => a - b)
+      : [];
+    if (!Number.isInteger(number) || number < 1 || numbers.length !== 15 || seen.has(number)) continue;
+    seen.add(number);
+    output.push({
+      number,
+      date: String(item?.date || ""),
+      numbers,
+      source: String(item?.source || ""),
+      notes: String(item?.notes || ""),
+      createdAt: String(item?.createdAt || ""),
+      updatedAt: String(item?.updatedAt || item?.createdAt || "")
+    });
+  }
+  return output.sort((a, b) => b.number - a.number);
+}
+
+function localContests() {
+  try {
+    if (globalThis.SULotoContests?.exportData) return normalizeContests(globalThis.SULotoContests.exportData());
+  } catch {}
+  return normalizeContests(parse(localStorage.getItem(CONTEST_KEY), []));
+}
+
+function contestTime(item) {
+  const value = new Date(item?.updatedAt || item?.createdAt || 0).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function mergeContests(local, remote) {
+  const map = new Map();
+  for (const item of remote) map.set(item.number, item);
+  for (const item of local) {
+    const previous = map.get(item.number);
+    if (!previous || contestTime(item) >= contestTime(previous)) map.set(item.number, item);
+  }
+  return normalizeContests([...map.values()]);
+}
+
+function applyContests(contests) {
+  const normalized = normalizeContests(contests);
+  applyingRemote = true;
+  try {
+    if (globalThis.SULotoContests?.importData) globalThis.SULotoContests.importData(normalized, true);
+    else {
+      const value = JSON.stringify(normalized);
+      localStorage.setItem(CONTEST_KEY, value);
+      window.dispatchEvent(new StorageEvent("storage", { key: CONTEST_KEY, newValue: value }));
+    }
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+async function pullContests() {
+  const path = `users/${encodeURIComponent(currentUser.uid)}/suLoto/${WALLET}/contests`;
+  const documents = await fetchCollection(path, 200);
+  const remote = normalizeContests(documents.map(document => {
+    const data = fieldsToObject(document.fields);
+    return {
+      number: Number(data.number ?? String(document.name || "").split("/").pop()),
+      date: data.date,
+      numbers: data.numbers,
+      source: data.source,
+      notes: data.notes,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt
+    };
+  }));
+  const merged = mergeContests(localContests(), remote);
+  applyContests(merged);
+  ready.contests = true;
+  return { remote, merged };
+}
+
+function normalizeBetRecords(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const output = {};
+  for (const [key, row] of Object.entries(source)) {
+    const contest = Number(row?.contest ?? key);
+    if (!Number.isInteger(contest) || contest < 1) continue;
+    const savedAt = String(row?.savedAt || new Date(0).toISOString());
+    output[String(contest)] = {
+      contest,
+      type: row?.type === "especial" ? "especial" : "normal",
+      specialName: String(row?.specialName || ""),
+      status: row?.status === "concluido" ? "concluido" : "ativo",
+      gameIds: Array.isArray(row?.gameIds) ? row.gameIds.map(String) : [],
+      unitPrice: Math.max(0, Number(row?.unitPrice) || 0),
+      totalInvested: Math.max(0, Number(row?.totalInvested) || 0),
+      createdAt: String(row?.createdAt || savedAt),
+      savedAt,
+      updatedAt: String(row?.updatedAt || row?.concludedAt || savedAt),
+      concludedAt: String(row?.concludedAt || ""),
+      releaseStatus: row?.releaseStatus === "registrado" ? "registrado" : "pendente"
+    };
+  }
+  return output;
+}
+
+function localBetRecords() {
+  return normalizeBetRecords(parse(localStorage.getItem(BETS_KEY), {}));
+}
+
+function betTime(row) {
+  const value = new Date(row?.updatedAt || row?.concludedAt || row?.savedAt || 0).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function mergeBetRecords(local, remote) {
+  const output = {};
+  const keys = new Set([...Object.keys(local), ...Object.keys(remote)]);
+  for (const key of keys) {
+    const a = local[key];
+    const b = remote[key];
+    output[key] = !a ? b : !b ? a : (betTime(a) >= betTime(b) ? a : b);
+  }
+  return normalizeBetRecords(output);
+}
+
+function applyBetRecords(records) {
+  const normalized = normalizeBetRecords(records);
+  applyingRemote = true;
+  try {
+    localStorage.setItem(BETS_KEY, JSON.stringify(normalized));
+    window.dispatchEvent(new CustomEvent("su:contest-bets-cloud-updated", { detail: normalized }));
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+async function pullContestBets() {
+  const document = await fetchDocument(`users/${encodeURIComponent(currentUser.uid)}/settings/suLotoContestBetsC2`);
+  const remote = document ? normalizeBetRecords(fromValue(document.fields?.records) || {}) : {};
+  const merged = mergeBetRecords(localBetRecords(), remote);
+  applyBetRecords(merged);
+  ready.contestBets = true;
+  return { remote, merged };
+}
+
+function isDirty(key) {
+  return localStorage.getItem(key) === "1";
+}
+
+function setDirty(key, value) {
+  if (value) localStorage.setItem(key, "1");
+  else localStorage.removeItem(key);
+}
+
+async function writePendingStatuses() {
+  const pending = pendingStatuses();
+  const entries = Object.entries(pending).filter(([, status]) => VALID.has(status));
+  if (!entries.length) return false;
+  emitState("saving", "Salvando jogos…");
+  const now = new Date().toISOString();
+  const writes = entries.map(([id, status]) => ({
+    update: {
+      name: documentName(`users/${currentUser.uid}/suLoto/${WALLET}/gameStatuses/${id}`),
+      fields: {
+        status: toValue(status),
+        wallet: toValue(WALLET),
+        updatedAtClient: { timestampValue: now },
+        updatedBy: toValue(deviceId()),
+        deviceName: toValue(deviceName())
+      }
+    }
+  }));
+  await commit(writes);
+  confirmPending(entries.map(([id]) => id));
+  channel?.postMessage?.({ domain: "statuses", at: now });
+  return true;
+}
+
+async function pushContests(contests = localContests()) {
+  const normalized = normalizeContests(contests);
+  const path = `users/${encodeURIComponent(currentUser.uid)}/suLoto/${WALLET}/contests`;
+  const remoteDocuments = await fetchCollection(path, 200);
+  const remoteIds = new Set(remoteDocuments.map(document => decodeURIComponent(String(document.name || "").split("/").pop() || "")));
+  const nextIds = new Set(normalized.map(item => String(item.number)));
+  const writes = [];
+  for (const item of normalized) {
+    writes.push({
+      update: {
+        name: documentName(`users/${currentUser.uid}/suLoto/${WALLET}/contests/${item.number}`),
+        fields: Object.fromEntries(Object.entries({ ...item, wallet: WALLET, updatedBy: deviceId() }).map(([key, value]) => [key, toValue(value)]))
+      }
+    });
+  }
+  for (const id of remoteIds) {
+    if (!nextIds.has(id)) writes.push({ delete: documentName(`users/${currentUser.uid}/suLoto/${WALLET}/contests/${id}`) });
+  }
+  await commit(writes);
+  setDirty(CONTEST_DIRTY_KEY, false);
+  channel?.postMessage?.({ domain: "contests", at: new Date().toISOString() });
+  return true;
+}
+
+async function pushContestBets(records = localBetRecords()) {
+  const now = new Date().toISOString();
+  const writes = [{
+    update: {
+      name: documentName(`users/${currentUser.uid}/settings/suLotoContestBetsC2`),
+      fields: {
+        app: toValue("SU Loto"),
+        wallet: toValue(WALLET),
+        records: toValue(normalizeBetRecords(records)),
+        updatedAtClient: { timestampValue: now },
+        updatedBy: toValue(deviceId())
+      }
+    }
+  }];
+  await commit(writes);
+  setDirty(BETS_DIRTY_KEY, false);
+  channel?.postMessage?.({ domain: "contestBets", at: now });
+  return true;
+}
+
+async function flushPendingWrites() {
+  if (Object.keys(pendingStatuses()).length) await writePendingStatuses();
+  if (isDirty(CONTEST_DIRTY_KEY)) await pushContests();
+  if (isDirty(BETS_DIRTY_KEY)) await pushContestBets();
+}
+
+async function syncAll(reason = "manual") {
+  if (!active || !currentUser || !navigator.onLine) return false;
+  if (syncing) return syncing;
+  syncing = (async () => {
+    emitState("saving", reason === "login" ? "Conectando à nuvem…" : "Atualizando dados…", { reason });
+    try {
+      await flushPendingWrites();
+      const [statusResult, contestResult, betsResult] = await Promise.all([
+        pullStatuses(),
+        pullContests(),
+        pullContestBets()
+      ]);
+      ready = { statuses: true, contests: true, contestBets: true };
+      markSynced(reason === "retomada" || reason === "pageshow" ? "Sincronizado ao retornar" : "Sincronizado");
+      return {
+        ok: true,
+        statuses: statusResult.count,
+        contests: contestResult.merged.length,
+        contestBets: Object.keys(betsResult.merged).length
+      };
+    } catch (error) {
+      setError("sync", error, "Falha na sincronização");
+      return { ok: false, error: lastError };
+    }
+  })().finally(() => { syncing = null; });
+  return syncing;
+}
+
+async function pollStatuses() {
+  if (!active || !currentUser || !navigator.onLine || document.visibilityState === "hidden" || syncing || statusPulling) return false;
+  statusPulling = (async () => {
+    try {
+      await pullStatuses();
+      if (lastError?.domain === "statuses" && !Object.keys(pendingStatuses()).length) {
+        lastError = null;
+        maybeSynced("Sincronizado");
+      }
+      return true;
+    } catch (error) {
+      setError("statuses", error, "Falha ao atualizar jogos", false);
+      return false;
+    }
+  })().finally(() => { statusPulling = null; });
+  return statusPulling;
+}
+
+async function pollFullDomains() {
+  if (!active || !currentUser || !navigator.onLine || document.visibilityState === "hidden" || syncing) return false;
+  try {
+    await Promise.all([pullContests(), pullContestBets()]);
+    lastFullPollAt = new Date().toISOString();
+    return true;
+  } catch (error) {
+    setError("secondary", error, "Falha ao atualizar concursos/apostas", false);
+    return false;
+  }
+}
+
+function startPolling() {
+  clearInterval(statusPolling);
+  clearInterval(fullPolling);
+  if (!active || !currentUser) return;
+  statusPolling = setInterval(() => { void pollStatuses(); }, STATUS_POLL_MS);
+  fullPolling = setInterval(() => { void pollFullDomains(); }, FULL_POLL_MS);
+}
+
+function scheduleStatusWrite(id, status) {
+  rememberPending(String(id || ""), status);
+  clearTimeout(statusWriteTimer);
+  statusWriteTimer = setTimeout(() => {
+    if (!currentUser || !navigator.onLine) return;
+    void writePendingStatuses()
+      .then(async () => {
+        await pullStatuses();
+        maybeSynced("Sincronizado");
+      })
+      .catch(error => setError("statuses", error, "Falha ao salvar jogo"));
+  }, 80);
+}
+
+function scheduleContestsWrite() {
+  setDirty(CONTEST_DIRTY_KEY, true);
+  clearTimeout(contestsWriteTimer);
+  contestsWriteTimer = setTimeout(() => {
+    if (!currentUser || !navigator.onLine) return;
+    emitState("saving", "Salvando concursos…");
+    void pushContests()
+      .then(async () => {
+        await pullContests();
+        maybeSynced("Sincronizado");
+      })
+      .catch(error => setError("contests", error, "Falha ao salvar concursos"));
+  }, 160);
+}
+
+function scheduleBetsWrite() {
+  setDirty(BETS_DIRTY_KEY, true);
+  clearTimeout(betsWriteTimer);
+  betsWriteTimer = setTimeout(() => {
+    if (!currentUser || !navigator.onLine) return;
+    emitState("saving", "Salvando apostas do concurso…");
+    void pushContestBets()
+      .then(async () => {
+        await pullContestBets();
+        maybeSynced("Sincronizado");
+      })
+      .catch(error => setError("contestBets", error, "Falha ao salvar apostas do concurso"));
+  }, 160);
+}
 
 if (active) {
-  try { channel = new BroadcastChannel("su-loto-c2-sync-v9"); } catch {}
-  channel?.addEventListener?.("message", event => { if (!currentUser || !event.data?.domain) return; if (event.data.domain === "statuses") void pullStatuses().then(() => maybeSynced()); if (event.data.domain === "contests") void pullContests().then(() => maybeSynced()); if (event.data.domain === "contestBets") void pullContestBets().then(() => maybeSynced()); });
+  try { channel = new BroadcastChannel("su-loto-c2-sync-v9-direct"); } catch {}
+
+  channel?.addEventListener?.("message", event => {
+    if (!currentUser || !event.data?.domain) return;
+    if (event.data.domain === "statuses") void pollStatuses();
+    else if (event.data.domain === "contests") void pullContests().then(() => maybeSynced()).catch(() => {});
+    else if (event.data.domain === "contestBets") void pullContestBets().then(() => maybeSynced()).catch(() => {});
+  });
+
   const eventName = globalThis.SULotoSyncEvents?.EVENT_NAME || "su:state-change";
-  window.addEventListener(eventName, event => { if (applyingRemote) return; const detail = event.detail || {}; if (!currentUser || detail.source === "cloud" || detail.source === "rest") return; if (detail.domain === "statuses") { const id = String(detail.detail?.id || ""); const status = String(detail.detail?.status || localStatuses()[id] || ""); if (id && VALID.has(status)) scheduleStatusWrite(id, status); } else if (detail.domain === "contests") scheduleContestsWrite(); else if (detail.domain === "contestBets") scheduleBetsWrite(); }, true);
-  const wake = reason => { if (currentUser && navigator.onLine) void syncAll(reason); };
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") wake("retomada"); });
+  window.addEventListener(eventName, event => {
+    if (applyingRemote) return;
+    const detail = event.detail || {};
+    if (!currentUser || detail.source === "cloud" || detail.source === "rest" || detail.source === "ios-rest-direct-poll") return;
+    if (detail.domain === "statuses") {
+      const id = String(detail.detail?.id || "");
+      const status = String(detail.detail?.status || localStatuses()[id] || "");
+      if (id && VALID.has(status)) scheduleStatusWrite(id, status);
+    } else if (detail.domain === "contests") {
+      scheduleContestsWrite();
+    } else if (detail.domain === "contestBets") {
+      scheduleBetsWrite();
+    }
+  }, true);
+
+  const wake = reason => {
+    if (currentUser && navigator.onLine) void syncAll(reason);
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") wake("retomada");
+  });
   window.addEventListener("pageshow", () => wake("pageshow"));
-  window.addEventListener("focus", () => void pollMeta());
+  window.addEventListener("focus", () => void pollStatuses());
   window.addEventListener("online", () => wake("online"));
   window.addEventListener("offline", () => emitState("offline", "Offline • alterações em espera"));
 }
 
-onAuthStateChanged(auth, user => { currentUser = user; ready = { statuses: false, contests: false, contestBets: false }; knownMeta = { statusRevision: null, contestsRevision: null, contestBetsRevision: null }; startPolling(); if (!active || !user) return; void syncAll("login"); });
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+  ready = { statuses: false, contests: false, contestBets: false };
+  lastError = null;
+  startPolling();
+  if (!active || !user) return;
+  void syncAll("login");
+});
 
-globalThis.SULotoIOSRestOperationalSync = Object.freeze({ active, protocol: "sync-v9", syncNow: () => syncAll("manual"), pullStatuses, pullContests, pullContestBets, pendingStatuses, diagnostics: () => ({ active, protocol: "sync-v9", authenticated: Boolean(currentUser), syncing: Boolean(syncing), ready: { ...ready }, knownMeta: { ...knownMeta }, pendingStatuses: pendingStatuses(), lastSync: localStorage.getItem(LAST_SYNC_KEY) || null, lastError, online: navigator.onLine }) });
+globalThis.SULotoIOSRestOperationalSync = Object.freeze({
+  active,
+  protocol: "sync-v9",
+  hotfix: "direct-status-poll-3",
+  syncNow: () => syncAll("manual"),
+  pullStatuses,
+  pullContests,
+  pullContestBets,
+  pendingStatuses,
+  diagnostics: () => ({
+    active,
+    protocol: "sync-v9",
+    hotfix: "direct-status-poll-3",
+    authenticated: Boolean(currentUser),
+    syncing: Boolean(syncing),
+    statusPulling: Boolean(statusPulling),
+    ready: { ...ready },
+    pendingStatuses: pendingStatuses(),
+    contestsDirty: isDirty(CONTEST_DIRTY_KEY),
+    contestBetsDirty: isDirty(BETS_DIRTY_KEY),
+    lastSync: localStorage.getItem(LAST_SYNC_KEY) || null,
+    lastStatusPollAt,
+    lastFullPollAt,
+    statusPollMs: STATUS_POLL_MS,
+    fullPollMs: FULL_POLL_MS,
+    lastError,
+    online: navigator.onLine
+  })
+});

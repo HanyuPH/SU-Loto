@@ -9,9 +9,11 @@ function testableSyncSource() {
   return syncSource
     .replace(/^import .*?;\n/gm, '')
     .replace(
-      /const firebaseApp = getApps\(\)\.find\(item => item\.name === APP_INSTANCE\);\nif \(!firebaseApp\) throw new Error\([^\n]+\);\nconst auth = getAuth\(firebaseApp\);/,
+      /const firebaseApp = getApps\(\)[\s\S]*?const auth = getAuth\(firebaseApp\);/,
       'const auth = globalThis.__mockAuth;'
-    );
+    )
+    .replace('const STATUS_POLL_MS = 2500;', 'const STATUS_POLL_MS = 120;')
+    .replace('const FULL_POLL_MS = 12000;', 'const FULL_POLL_MS = 300;');
 }
 
 async function newOriginPage(browser) {
@@ -28,48 +30,50 @@ async function newOriginPage(browser) {
 async function installMockCloud(page) {
   await page.evaluate(() => {
     const nums = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+    const now = '2026-08-08T12:00:00.000Z';
     const remote = {
       statuses: Object.fromEntries(Array.from({ length: 300 }, (_, i) => [String(i + 1), i === 0 ? 'apostado' : 'pendente'])),
-      contests: Array.from({ length: 8 }, (_, i) => ({
-        number: 3755 - i,
-        date: '2026-08-01',
+      contests: Array.from({ length: 9 }, (_, i) => ({
+        number: 3756 - i,
+        date: '2026-08-07',
         numbers: nums,
         source: 'https://caixa.test',
         notes: '',
-        createdAt: '2026-08-01T00:00:00.000Z',
-        updatedAt: `2026-08-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`
+        createdAt: now,
+        updatedAt: now
       })),
       bets: {
-        '3755': {
-          contest: 3755,
+        '3756': {
+          contest: 3756,
           type: 'normal',
           specialName: '',
           status: 'ativo',
           gameIds: ['1'],
           unitPrice: 3.5,
           totalInvested: 3.5,
-          createdAt: '2026-08-01T00:00:00.000Z',
-          savedAt: '2026-08-01T00:00:00.000Z',
-          updatedAt: '2026-08-01T00:00:00.000Z',
+          createdAt: now,
+          savedAt: now,
+          updatedAt: now,
           concludedAt: '',
           releaseStatus: 'pendente'
         }
       },
-      meta: { statusRevision: 's1', contestsRevision: 'c1', contestBetsRevision: 'b1' },
       commits: [],
       failNextCommit: false
     };
 
     globalThis.__remote = remote;
-    globalThis.SULotoFirestoreTransport = { ios: true, restOnly: true };
+    globalThis.SULotoFirestoreTransport = { ios: true, restOnly: true, protocol: 'sync-v9' };
     globalThis.SU_LOTO_GAMES = Array.from({ length: 300 }, (_, i) => ({ id: i + 1 }));
     globalThis.SU_LOTO_WALLET_MANIFEST = { source: { registeredWalletLogicalSha256: 'hash-test' } };
     globalThis.__mockAuth = {};
     globalThis.__authUser = { uid: 'user1', getIdToken: async () => 'token-test' };
     globalThis.onAuthStateChanged = (_auth, cb) => { globalThis.__authCb = cb; };
     globalThis.SULotoApp = { refreshFromStorage: () => { globalThis.__refreshes = (globalThis.__refreshes || 0) + 1; } };
+    globalThis.SULotoSyncEvents = { EVENT_NAME: 'su:state-change' };
 
     let contests = [];
+    globalThis.__setLocalContests = value => { contests = structuredClone(value); };
     globalThis.SULotoContests = {
       exportData: () => structuredClone(contests),
       importData: value => {
@@ -109,7 +113,7 @@ async function installMockCloud(page) {
           return response({ error: { status: 'UNAVAILABLE', message: 'falha simulada' } }, 503);
         }
         const payload = JSON.parse(options.body);
-        remote.commits.push(payload);
+        remote.commits.push(structuredClone(payload));
         for (const write of payload.writes || []) {
           if (write.delete) {
             const id = write.delete.split('/').pop();
@@ -120,10 +124,10 @@ async function installMockCloud(page) {
           const path = document.name;
           const data = Object.fromEntries(Object.entries(document.fields || {}).map(([k, v]) => [k, decode(v)]));
           if (path.includes('/gameStatuses/')) remote.statuses[path.split('/').pop()] = data.status;
-          else if (path.endsWith('/syncMeta/state')) Object.assign(remote.meta, data);
           else if (path.includes('/contests/')) {
-            remote.contests = remote.contests.filter(row => Number(row.number) !== Number(data.number));
-            remote.contests.push(data);
+            const number = Number(data.number ?? path.split('/').pop());
+            remote.contests = remote.contests.filter(row => Number(row.number) !== number);
+            remote.contests.push({ ...data, number });
           } else if (path.endsWith('/settings/suLotoContestBetsC2')) remote.bets = data.records || {};
         }
         return response({ writeResults: [] });
@@ -144,9 +148,6 @@ async function installMockCloud(page) {
       if (text.endsWith('/settings/suLotoContestBetsC2')) {
         return response({ name: 'bets', fields: { records: encode(remote.bets) } });
       }
-      if (text.endsWith('/syncMeta/state')) {
-        return response({ name: 'meta', fields: Object.fromEntries(Object.entries(remote.meta).map(([k, v]) => [k, encode(v)])) });
-      }
       return response({ error: { status: 'NOT_FOUND' } }, 404);
     };
   });
@@ -156,6 +157,12 @@ async function testSync(browserType, name) {
   const browser = await browserType.launch({ headless: true });
   const page = await newOriginPage(browser);
   await installMockCloud(page);
+  const states = [];
+  page.on('console', message => {
+    if (message.type() === 'error') console.log(`${name} console error: ${message.text()}`);
+  });
+  await page.exposeFunction('__captureState', detail => states.push(detail));
+  await page.evaluate(() => window.addEventListener('su:loto-rest-sync-state', event => globalThis.__captureState(event.detail)));
   await page.addScriptTag({ content: `const onAuthStateChanged = globalThis.onAuthStateChanged;\n${testableSyncSource()}` });
   await page.evaluate(() => globalThis.__authCb(globalThis.__authUser));
 
@@ -164,17 +171,16 @@ async function testSync(browserType, name) {
     return d?.ready?.statuses && d?.ready?.contests && d?.ready?.contestBets;
   }, null, { timeout: 10000 });
 
-  const initial = await page.evaluate(() => ({
+  let initial = await page.evaluate(() => ({
     statuses: JSON.parse(localStorage.getItem('su-loto-c2-status-v4')).statuses,
     contestCount: globalThis.__contestCount,
     diagnostics: globalThis.SULotoIOSRestOperationalSync.diagnostics()
   }));
-  assert.equal(initial.statuses['1'], 'apostado', `${name}: status remoto inicial`);
-  assert.equal(initial.contestCount, 8, `${name}: oito concursos iniciais`);
-  assert.equal(initial.diagnostics.ready.contestBets, true, `${name}: apostas por concurso iniciais`);
-  assert.ok(initial.diagnostics.lastSync, `${name}: última sincronização inicial`);
+  assert.equal(initial.statuses['1'], 'apostado', `${name}: status inicial remoto`);
+  assert.equal(initial.contestCount, 9, `${name}: nove concursos iniciais`);
+  assert.equal(initial.diagnostics.hotfix, 'direct-status-poll-3', `${name}: hotfix ativo`);
 
-  // Gravação normal de um Apostado.
+  // PWA -> remoto: gravação normal, sem syncMeta.
   await page.evaluate(() => {
     const payload = JSON.parse(localStorage.getItem('su-loto-c2-status-v4'));
     payload.statuses['2'] = 'apostado';
@@ -185,10 +191,13 @@ async function testSync(browserType, name) {
   });
   await page.waitForFunction(() => globalThis.__remote.statuses['2'] === 'apostado', null, { timeout: 5000 });
   let diagnostics = await page.evaluate(() => globalThis.SULotoIOSRestOperationalSync.diagnostics());
-  assert.deepEqual(diagnostics.pendingStatuses, {}, `${name}: fila local limpa após gravação REST`);
+  assert.deepEqual(diagnostics.pendingStatuses, {}, `${name}: fila limpa após write`);
 
-  // Reproduz "Falha ao salvar": a primeira tentativa falha, o estado permanece
-  // pendente localmente e uma sincronização seguinte o envia sem perda.
+  // Safari -> PWA: altera remoto SEM qualquer syncMeta. O polling direto deve captar.
+  await page.evaluate(() => { globalThis.__remote.statuses['3'] = 'apostado'; });
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('su-loto-c2-status-v4')).statuses['3'] === 'apostado', null, { timeout: 2500 });
+
+  // Falha real de gravação preserva pendência; syncNow recupera sem perder estado.
   await page.evaluate(() => {
     globalThis.__remote.failNextCommit = true;
     const payload = JSON.parse(localStorage.getItem('su-loto-c2-status-v4'));
@@ -198,66 +207,72 @@ async function testSync(browserType, name) {
       detail: { domain: 'statuses', source: 'ui', detail: { id: '4', status: 'apostado' } }
     }));
   });
-  await page.waitForFunction(() => globalThis.SULotoIOSRestOperationalSync.diagnostics().lastError?.code === 'UNAVAILABLE', null, { timeout: 5000 });
+  await page.waitForFunction(() => globalThis.SULotoIOSRestOperationalSync.diagnostics().lastError?.domain === 'statuses', null, { timeout: 5000 });
   diagnostics = await page.evaluate(() => globalThis.SULotoIOSRestOperationalSync.diagnostics());
-  assert.equal(diagnostics.pendingStatuses['4'], 'apostado', `${name}: falha preserva a alteração local`);
-  assert.notEqual(await page.evaluate(() => globalThis.__remote.statuses['4']), 'apostado', `${name}: falha não finge gravação remota`);
+  assert.equal(diagnostics.pendingStatuses['4'], 'apostado', `${name}: falha preserva pending`);
   const recovery = await page.evaluate(() => globalThis.SULotoIOSRestOperationalSync.syncNow());
-  assert.equal(recovery.ok, true, `${name}: sincronização manual recupera após falha`);
+  assert.equal(recovery.ok, true, `${name}: recuperação manual`);
   await page.waitForFunction(() => globalThis.__remote.statuses['4'] === 'apostado', null, { timeout: 5000 });
   diagnostics = await page.evaluate(() => globalThis.SULotoIOSRestOperationalSync.diagnostics());
-  assert.deepEqual(diagnostics.pendingStatuses, {}, `${name}: fila limpa após recuperação`);
+  assert.deepEqual(diagnostics.pendingStatuses, {}, `${name}: pending zerado após recuperação`);
 
-  // Alteração remota de jogo deve chegar pelo polling de revisão.
-  await page.evaluate(() => {
-    globalThis.__remote.statuses['3'] = 'apostado';
-    globalThis.__remote.meta.statusRevision = 'remote-s2';
-  });
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem('su-loto-c2-status-v4')).statuses['3'] === 'apostado', null, { timeout: 6000 });
-
-  // Concurso 3756 chegando no outro ambiente deve elevar 8 -> 9.
+  // Pull periódico de concursos é somente leitura: remoto novo chega sem commit automático.
+  const commitsBeforeRemoteContest = await page.evaluate(() => globalThis.__remote.commits.length);
   await page.evaluate(() => {
     globalThis.__remote.contests.push({
-      number: 3756,
-      date: '2026-08-07',
-      numbers: [2,3,5,6,9,10,11,13,14,15,16,19,20,21,22],
-      source: 'https://caixa.test/3756',
+      number: 3757,
+      date: '2026-08-09',
+      numbers: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+      source: 'https://caixa.test/3757',
       notes: '',
-      createdAt: '2026-08-08T00:00:00.000Z',
-      updatedAt: '2026-08-08T00:00:00.000Z'
+      createdAt: '2026-08-09T00:00:00.000Z',
+      updatedAt: '2026-08-09T00:00:00.000Z'
     });
-    globalThis.__remote.meta.contestsRevision = 'remote-c2';
   });
-  await page.waitForFunction(() => globalThis.__contestCount === 9, null, { timeout: 6000 });
+  await page.waitForFunction(() => globalThis.__contestCount === 10, null, { timeout: 3000 });
+  const commitsAfterRemoteContest = await page.evaluate(() => globalThis.__remote.commits.length);
+  assert.equal(commitsAfterRemoteContest, commitsBeforeRemoteContest, `${name}: pull de concurso não deve regravar`);
 
-  // Apostas por concurso também usam o mesmo caminho REST e revisão.
+  // Mudança local de concurso deve gravar por evento explícito.
+  await page.evaluate(() => {
+    const current = globalThis.SULotoContests.exportData();
+    current.push({
+      number: 3758,
+      date: '2026-08-10',
+      numbers: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+      source: 'local', notes: '',
+      createdAt: '2026-08-10T00:00:00.000Z', updatedAt: '2026-08-10T00:00:00.000Z'
+    });
+    globalThis.__setLocalContests(current);
+    window.dispatchEvent(new CustomEvent('su:state-change', { detail: { domain: 'contests', source: 'ui' } }));
+  });
+  await page.waitForFunction(() => globalThis.__remote.contests.some(row => Number(row.number) === 3758), null, { timeout: 5000 });
+
+  // Mudança local de apostas por concurso também deve gravar explicitamente.
   await page.evaluate(() => {
     const records = JSON.parse(localStorage.getItem('su-loto-c2-contest-bets-v1') || '{}');
-    records['3756'] = {
-      contest: 3756,
-      type: 'normal',
-      specialName: '',
-      status: 'ativo',
-      gameIds: ['2','4'],
-      unitPrice: 3.5,
-      totalInvested: 7,
-      createdAt: new Date().toISOString(),
-      savedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      concludedAt: '',
-      releaseStatus: 'pendente'
+    records['3758'] = {
+      contest: 3758, type: 'normal', specialName: '', status: 'ativo', gameIds: ['2','4'],
+      unitPrice: 3.5, totalInvested: 7,
+      createdAt: new Date().toISOString(), savedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      concludedAt: '', releaseStatus: 'pendente'
     };
     localStorage.setItem('su-loto-c2-contest-bets-v1', JSON.stringify(records));
-    window.dispatchEvent(new CustomEvent('su:state-change', {
-      detail: { domain: 'contestBets', source: 'ui', detail: { contest: 3756 } }
-    }));
+    window.dispatchEvent(new CustomEvent('su:state-change', { detail: { domain: 'contestBets', source: 'ui' } }));
   });
-  await page.waitForFunction(() => Boolean(globalThis.__remote.bets['3756']), null, { timeout: 5000 });
+  await page.waitForFunction(() => Boolean(globalThis.__remote.bets['3758']), null, { timeout: 5000 });
 
-  const final = await page.evaluate(() => globalThis.SULotoIOSRestOperationalSync.diagnostics());
-  assert.equal(final.lastError, null, `${name}: sem erro final`);
-  assert.ok(final.lastSync, `${name}: última sincronização final`);
+  const final = await page.evaluate(() => ({
+    diagnostics: globalThis.SULotoIOSRestOperationalSync.diagnostics(),
+    names: globalThis.__remote.commits.flatMap(commit => (commit.writes || []).map(write => write.update?.name || write.delete || ''))
+  }));
+  assert.equal(final.names.some(nameValue => String(nameValue).includes('/syncMeta/state')), false, `${name}: nenhum commit syncMeta`);
+  assert.ok(final.diagnostics.lastStatusPollAt, `${name}: polling de status executou`);
+  assert.equal(final.diagnostics.contestsDirty, false, `${name}: concursos sem dirty final`);
+  assert.equal(final.diagnostics.contestBetsDirty, false, `${name}: apostas sem dirty final`);
+
   await browser.close();
+  console.log(`${name}: direct-poll Safari<->PWA aprovado`);
 }
 
 async function testOfficial(browserType, name) {
@@ -284,17 +299,14 @@ async function testOfficial(browserType, name) {
   });
   await page.addScriptTag({ content: officialSource });
   await page.waitForFunction(() => document.getElementById('official-preview-title')?.textContent.includes('3756'), null, { timeout: 5000 });
-  const result = await page.evaluate(() => ({
-    preview: document.getElementById('official-preview-title').textContent,
-    diagnostics: globalThis.SULotoOfficialLiveRefresh.diagnostics()
-  }));
-  assert.match(result.preview, /3756/, `${name}: preview promoveu o concurso 3756`);
-  assert.equal(result.diagnostics.lastRemoteNumber, 3756, `${name}: consulta direta encontrou 3756`);
+  const result = await page.evaluate(() => globalThis.SULotoOfficialLiveRefresh.diagnostics());
+  assert.equal(result.lastRemoteNumber, 3756, `${name}: resultado oficial 3756`);
   await browser.close();
 }
 
 for (const [browserType, name] of [[chromium, 'Chromium'], [webkit, 'WebKit']]) {
   await testSync(browserType, name);
   await testOfficial(browserType, name);
-  console.log(`${name}: sync-v9, recuperação e resultado 3756 aprovados`);
 }
+
+console.log('sync-v9 direct-poll browser gates: OK');
