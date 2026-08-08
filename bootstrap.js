@@ -111,7 +111,8 @@ async function loadApplication() {
     .catch(error => console.error("SU Loto módulos locais:", error));
 
   const cloudModules = import("./cloud-sync.js?v=3")
-    .then(() => import("./cloud-resume-refresh.js?v=1"))
+    .then(() => import("./ios-rest-status-refresh.js?v=1"))
+    .then(() => import("./cloud-resume-refresh.js?v=2"))
     .then(() => import("./ecosystem-ui.js?v=5"))
     .then(() => import("./ecosystem-backup.js"))
     .then(() => localModules)
