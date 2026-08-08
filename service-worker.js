@@ -15,6 +15,7 @@ const PRECACHE = [
   "./beta-banner.js",
   "./beta-layout-review.js",
   "./cloud-sync.js",
+  "./cloud-resume-refresh.js",
   "./ecosystem-ui.js",
   "./ecosystem-backup.js",
   "./prize-analysis.js",
