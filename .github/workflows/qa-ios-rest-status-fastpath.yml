@@ -1,0 +1,68 @@
+name: QA fast path REST iOS
+
+on:
+  push:
+    branches:
+      - agent/su-loto-v23-ios-rest-status-fastpath
+  pull_request:
+    branches:
+      - beta
+
+permissions:
+  contents: read
+
+jobs:
+  qa-fastpath:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validar Carteira Oficial C2
+        run: node scripts/validate-wallet-data.mjs
+
+      - name: Validar sintaxe e arquitetura
+        run: |
+          node --check ios-rest-status-refresh.js
+          node --check cloud-resume-refresh.js
+          node --check bootstrap.js
+          node --check service-worker.js
+          node tests/ios-rest-status-fastpath-static.mjs
+
+      - name: Instalar WebKit
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps webkit
+
+      - name: Testar fast path em WebKit/iPhone
+        run: |
+          python3 -m http.server 4173 >/tmp/su-loto-fastpath-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/tests/ios-rest-fastpath-harness.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/ios-rest-status-fastpath-webkit.mjs
+
+      - name: Confirmar escopo protegido
+        run: |
+          git fetch origin beta
+          changed="$(git diff --name-only origin/beta...HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -E '^(data/carteira-c2/|VERSION$|app\.js$|contests\.js$|data/migrations/)' | grep -q .; then
+            echo 'QA falhou: arquivo constitucional/operacional protegido foi alterado.' >&2
+            exit 1
+          fi
+          if git diff --name-only origin/beta...HEAD | grep -q '^cloud-sync\.js$'; then
+            echo 'QA falhou: núcleo cloud-sync.js não deveria ser alterado neste fast path.' >&2
+            exit 1
+          fi
