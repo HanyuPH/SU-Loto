@@ -27,9 +27,9 @@ assert.ok(cloud.includes("Conectando à nuvem…"), "estado de conexão não blo
 assert.ok(cloud.includes("Conexão lenta • sincronizando…"), "conexão lenta deve ser identificada sem travar a aplicação");
 
 assert.ok(bootstrap.includes('import("./cloud-sync.js?v=3")'), "bootstrap deve forçar cloud-sync v3");
-assert.ok(serviceWorker.includes('const CACHE = "su-loto-c2-v23-sync-v5";'), "Service Worker deve usar cache sync-v5");
+assert.ok(serviceWorker.includes('const CACHE = "su-loto-c2-v23-sync-v6";'), "Service Worker deve usar cache sync-v6");
 assert.ok(guard.includes("Conectando à nuvem"), "guard deve compactar a conexão rotineira");
 assert.ok(guard.includes("Conexão lenta"), "guard deve compactar conexão lenta sem esconder erros reais");
 assert.ok(guard.includes("Verificando login"), "verificação automática de login deve ficar compacta");
 
-console.log("Arquitetura de startup aprovada: listeners primeiro, reconciliação em tempo real, UI de conexão compacta e cache sync-v5.");
+console.log("Arquitetura de startup aprovada: listeners primeiro, reconciliação em tempo real, UI de conexão compacta e cache sync-v6.");
