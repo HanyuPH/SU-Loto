@@ -16,4 +16,10 @@
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
+
+  // Recuperação adicional específica para a troca Safari <-> PWA no iOS.
+  // O módulo aguarda a engine REST ficar pronta antes de instalar os listeners.
+  import("./ios-safari-pwa-catchup.js?v=1").catch(error => {
+    console.warn("SU Loto: recuperação Safari-PWA indisponível.", error);
+  });
 })();
