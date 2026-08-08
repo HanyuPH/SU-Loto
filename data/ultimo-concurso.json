@@ -1,82 +1,82 @@
 {
   "schemaVersion": 1,
   "game": "LOTOFACIL",
-  "number": 3755,
-  "date": "2026-08-06",
+  "number": 3756,
+  "date": "2026-08-07",
   "numbers": [
+    2,
     3,
-    4,
     5,
-    7,
-    8,
+    6,
     9,
+    10,
     11,
-    12,
+    13,
+    14,
+    15,
     16,
-    18,
+    19,
     20,
-    22,
-    23,
-    24,
-    25
+    21,
+    22
   ],
   "drawOrder": [
-    3,
-    24,
-    23,
-    12,
-    5,
-    16,
-    8,
-    18,
-    7,
-    20,
-    22,
-    4,
+    15,
+    19,
     9,
-    25,
-    11
+    6,
+    21,
+    20,
+    14,
+    10,
+    13,
+    11,
+    5,
+    3,
+    2,
+    16,
+    22
   ],
-  "source": "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/3755",
+  "source": "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/3756",
   "official": true,
-  "updatedAt": "2026-08-07T05:55:33.285Z",
+  "updatedAt": "2026-08-08T14:11:25.697Z",
   "accumulated": false,
   "location": "SÃO PAULO, SP",
   "prizeTiers": [
     {
       "hits": 15,
-      "winners": 2,
-      "prize": 2010388.23,
+      "winners": 3,
+      "prize": 565758.41,
       "description": "15 acertos"
     },
     {
       "hits": 14,
-      "winners": 416,
-      "prize": 1846.95,
+      "winners": 379,
+      "prize": 1341.42,
       "description": "14 acertos"
     },
     {
       "hits": 13,
-      "winners": 13243,
+      "winners": 10249,
       "prize": 35,
       "description": "13 acertos"
     },
     {
       "hits": 12,
-      "winners": 154725,
+      "winners": 109675,
       "prize": 14,
       "description": "12 acertos"
     },
     {
       "hits": 11,
-      "winners": 821411,
+      "winners": 550108,
       "prize": 7,
       "description": "11 acertos"
     }
   ],
   "nextContest": {
-    "number": 3756,
-    "date": "2026-08-07",
+    "number": 3757,
+    "date": "2026-08-08",
     "estimatedPrize": 2000000
   }
 }

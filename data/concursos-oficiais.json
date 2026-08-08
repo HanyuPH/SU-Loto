@@ -5,6 +5,88 @@
     {
       "schemaVersion": 1,
       "game": "LOTOFACIL",
+      "number": 3756,
+      "date": "2026-08-07",
+      "numbers": [
+        2,
+        3,
+        5,
+        6,
+        9,
+        10,
+        11,
+        13,
+        14,
+        15,
+        16,
+        19,
+        20,
+        21,
+        22
+      ],
+      "drawOrder": [
+        15,
+        19,
+        9,
+        6,
+        21,
+        20,
+        14,
+        10,
+        13,
+        11,
+        5,
+        3,
+        2,
+        16,
+        22
+      ],
+      "source": "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/3756",
+      "official": true,
+      "updatedAt": "2026-08-08T14:11:25.697Z",
+      "accumulated": false,
+      "location": "SÃO PAULO, SP",
+      "prizeTiers": [
+        {
+          "hits": 15,
+          "winners": 3,
+          "prize": 565758.41,
+          "description": "15 acertos"
+        },
+        {
+          "hits": 14,
+          "winners": 379,
+          "prize": 1341.42,
+          "description": "14 acertos"
+        },
+        {
+          "hits": 13,
+          "winners": 10249,
+          "prize": 35,
+          "description": "13 acertos"
+        },
+        {
+          "hits": 12,
+          "winners": 109675,
+          "prize": 14,
+          "description": "12 acertos"
+        },
+        {
+          "hits": 11,
+          "winners": 550108,
+          "prize": 7,
+          "description": "11 acertos"
+        }
+      ],
+      "nextContest": {
+        "number": 3757,
+        "date": "2026-08-08",
+        "estimatedPrize": 2000000
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "game": "LOTOFACIL",
       "number": 3755,
       "date": "2026-08-06",
       "numbers": [
