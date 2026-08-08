@@ -40,6 +40,32 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium webkit
 
+      - name: Isolar autenticação no ambiente de QA
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/live-post-sync-v5-visual.mjs')
+          text = path.read_text()
+          old = '''  await page.evaluate(() => {
+              const gate = document.getElementById("su-loto-cloud-gate");
+              if (gate) gate.hidden = true;
+            });'''
+          new = '''  await page.evaluate(() => {
+              let style = document.getElementById("qa-hide-cloud-gate");
+              if (!style) {
+                style = document.createElement("style");
+                style.id = "qa-hide-cloud-gate";
+                style.textContent = "#su-loto-cloud-gate{display:none!important;pointer-events:none!important}";
+                document.head.appendChild(style);
+              }
+              const gate = document.getElementById("su-loto-cloud-gate");
+              if (gate) gate.hidden = true;
+            });'''
+          if old not in text:
+              raise SystemExit('Trecho esperado de hideAuthGate não encontrado')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Executar bateria pública e visual
         run: node tests/live-post-sync-v5-visual.mjs
 
