@@ -7,9 +7,9 @@ on:
       - ".github/workflows/update-lotofacil-result.yml"
       - "scripts/update-lotofacil-result.mjs"
   schedule:
-    # Consulta a cada 30 minutos no período noturno do Brasil (UTC).
-    - cron: "17,47 21-23 * * *"
-    - cron: "17,47 0-3 * * *"
+    # Verificação horária: reduz dependência de uma janela noturna específica
+    # e garante recuperação automática caso o agendador ou a CAIXA atrasem.
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       contest_number:
@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: atualizar-resultado-lotofacil
@@ -37,7 +38,7 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Consultar e validar resultado oficial
         env:
@@ -45,9 +46,11 @@ jobs:
         run: node scripts/update-lotofacil-result.mjs
 
       - name: Publicar somente quando houver alteração
+        id: publish
         run: |
           if git diff --quiet -- data/ultimo-concurso.json data/concursos-oficiais.json data/concursos-oficiais.csv; then
             echo "Nenhum resultado novo ou corrigido."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -55,3 +58,15 @@ jobs:
           git add data/ultimo-concurso.json data/concursos-oficiais.json data/concursos-oficiais.csv
           git commit -m "Atualizar resultado oficial da Lotofácil"
           git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Republicar GitHub Pages após resultado novo
+        if: steps.publish.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/pages-main-beta.yml/dispatches" \
+            -f ref=main
+          echo "Publicação do Pages solicitada após atualização do resultado oficial."
