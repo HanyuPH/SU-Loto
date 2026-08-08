@@ -3,12 +3,11 @@ const OPERATIONAL_MIGRATION_URL = "./data/migrations/v11-operational-seed.json";
 const EXPECTED_WALLET = "SU Loto - C2";
 const EXPECTED_GAME_COUNT = 300;
 const FORBIDDEN_GAME_FIELDS = new Set(["status", "initialStatus", "registered", "apostado", "pendente"]);
-const SERVICE_WORKER_BUILD = "sync-v8";
+const SERVICE_WORKER_BUILD = "sync-v9";
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   const hadController = Boolean(navigator.serviceWorker.controller);
-
   if (hadController) {
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       const reloadKey = `su-loto-sw-controller-${SERVICE_WORKER_BUILD}`;
@@ -17,17 +16,10 @@ function registerServiceWorker() {
       location.reload();
     }, { once: true });
   }
-
   const register = async () => {
     try {
-      const registration = await navigator.serviceWorker.register(`./service-worker.js?build=${SERVICE_WORKER_BUILD}`, {
-        updateViaCache: "none"
-      });
-
-      const promote = worker => {
-        if (worker) worker.postMessage({ type: "SKIP_WAITING", build: SERVICE_WORKER_BUILD });
-      };
-
+      const registration = await navigator.serviceWorker.register(`./service-worker.js?build=${SERVICE_WORKER_BUILD}`, { updateViaCache: "none" });
+      const promote = worker => { if (worker) worker.postMessage({ type: "SKIP_WAITING", build: SERVICE_WORKER_BUILD }); };
       if (registration.waiting) promote(registration.waiting);
       registration.addEventListener("updatefound", () => {
         const worker = registration.installing;
@@ -36,14 +28,12 @@ function registerServiceWorker() {
           if (worker.state === "installed" && navigator.serviceWorker.controller) promote(worker);
         });
       });
-
       try { await registration.update(); }
       catch (error) { console.warn("SU Loto: verificação imediata de atualização do PWA falhou.", error); }
     } catch (error) {
       console.warn("SU Loto: não foi possível registrar o Service Worker.", error);
     }
   };
-
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
 }
@@ -128,13 +118,15 @@ async function loadApplication() {
   globalThis.SU_LOTO_GAMES = deepFreeze(games);
   globalThis.SU_LOTO_OPERATIONAL_SEED = deepFreeze(operationalSeed);
 
-  await import("./firebase-ios-transport.js?v=1");
+  await import("./firebase-ios-transport.js?v=2");
   await import("./sync-local-first-guard.js?v=1");
   await import("./contests.js");
   await import("./app.js");
   await import("./official-results.js");
+  await import("./official-results-live-refresh.js?v=1");
   await import("./sync-events.js");
 
+  const isIOSRest = Boolean(globalThis.SULotoFirestoreTransport?.ios && globalThis.SULotoFirestoreTransport?.restOnly);
   const betaIdentity = loadBetaIdentity().catch(error => console.warn("SU Loto identificação Beta:", error));
   const localModules = import("./beta-layout-review.js?v=2")
     .then(() => import("./prize-analysis.js?v=2"))
@@ -144,15 +136,23 @@ async function loadApplication() {
     .then(() => import("./contest-selection-highlight.js?v=1"))
     .catch(error => console.error("SU Loto módulos locais:", error));
 
-  const cloudModules = import("./cloud-sync.js?v=3")
-    .then(() => import("./ios-rest-status-refresh.js?v=1"))
-    .then(() => import("./cloud-resume-refresh.js?v=2"))
-    .then(() => import("./ecosystem-ui.js?v=5"))
-    .then(() => import("./ios-pwa-sync-coordinator.js?v=1"))
-    .then(() => import("./ecosystem-backup.js"))
-    .then(() => localModules)
-    .then(() => import("./contest-bets-cloud.js?v=3"))
-    .catch(error => console.warn("SU Loto nuvem indisponível:", error));
+  let cloudModules;
+  if (isIOSRest) {
+    cloudModules = import("./ios-rest-operational-sync.js?v=1")
+      .then(() => import("./ios-cloud-shell.js?v=1"))
+      .then(() => import("./ecosystem-ui.js?v=5"))
+      .then(() => import("./ecosystem-backup.js"))
+      .then(() => localModules)
+      .catch(error => console.warn("SU Loto sincronização REST iOS indisponível:", error));
+  } else {
+    cloudModules = import("./cloud-sync.js?v=3")
+      .then(() => import("./cloud-resume-refresh.js?v=2"))
+      .then(() => import("./ecosystem-ui.js?v=5"))
+      .then(() => import("./ecosystem-backup.js"))
+      .then(() => localModules)
+      .then(() => import("./contest-bets-cloud.js?v=3"))
+      .catch(error => console.warn("SU Loto nuvem indisponível:", error));
+  }
 
   await Promise.allSettled([betaIdentity, localModules, cloudModules]);
 }
