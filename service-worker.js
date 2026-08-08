@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-v23-sync-v5";
+const CACHE = "su-loto-c2-v23-sync-v6";
 
 const PRECACHE = [
   "./",
@@ -7,6 +7,7 @@ const PRECACHE = [
   "./contests.css",
   "./official-results.css",
   "./bootstrap.js",
+  "./firebase-ios-transport.js",
   "./sync-local-first-guard.js",
   "./sync-events.js",
   "./app.js",
