@@ -81,6 +81,7 @@ globalThis.SULotoFirestoreTransport = Object.freeze({
   longPollingForced: false,
   persistentFirestoreCache: false,
   restOnly: ios,
-  protocol: ios ? "sync-v9-hotfix1" : "sdk",
+  protocol: ios ? "sync-v9" : "sdk",
+  hotfix: ios ? "write-login-1" : null,
   operationalWriteBeforeMeta: ios
 });
