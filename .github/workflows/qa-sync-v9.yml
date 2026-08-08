@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
       - name: Validar sintaxe e C2
         run: |
           node --check bootstrap.js
@@ -35,7 +35,7 @@ jobs:
           npm install playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium webkit
       - name: Bateria Chromium e WebKit
-        run: node tests/sync-v9-webkit.mjs
+        run: node tests/sync-v9-browser.mjs
       - name: Conferir escopo protegido
         run: |
           git fetch origin beta
