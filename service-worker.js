@@ -1,4 +1,4 @@
-const CACHE = "su-loto-c2-v23-sync-v8";
+const CACHE = "su-loto-c2-v23-sync-v9";
 
 const PRECACHE = [
   "./",
@@ -13,12 +13,13 @@ const PRECACHE = [
   "./app.js",
   "./contests.js",
   "./official-results.js",
+  "./official-results-live-refresh.js",
   "./beta-banner.js",
   "./beta-layout-review.js",
   "./cloud-sync.js",
-  "./ios-rest-status-refresh.js",
   "./cloud-resume-refresh.js",
-  "./ios-pwa-sync-coordinator.js",
+  "./ios-rest-operational-sync.js",
+  "./ios-cloud-shell.js",
   "./ecosystem-ui.js",
   "./ecosystem-backup.js",
   "./prize-analysis.js",
