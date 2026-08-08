@@ -105,11 +105,19 @@ async function recover(reason = "retomada") {
     for (const delay of RETRY_DELAYS) {
       if (run !== generation || !onlineAndVisible()) return false;
       if (delay) await sleep(delay);
-      const result = await pullDomains();
-      domainsOk = result.ok;
+
+      if (!domainsOk) {
+        const result = await pullDomains();
+        domainsOk = result.ok;
+      } else {
+        // Depois de confirmar concursos e apostas uma vez, as leituras extras
+        // são apenas de status para capturar a corrida Safari -> PWA sem
+        // retransmitir os outros domínios desnecessariamente.
+        try { await engine.pullStatuses(); }
+        catch { domainsOk = false; }
+      }
+
       if (domainsOk && !Object.keys(pendingStatuses()).length) {
-        // Uma segunda leitura de status evita a corrida Safari -> PWA quando o
-        // write do outro contexto termina imediatamente após a retomada.
         if (delay < RETRY_DELAYS.at(-1)) continue;
         markRecovered(reason === "retomada" || reason === "pageshow" ? "Sincronizado ao retornar" : "Sincronizado");
         return true;
