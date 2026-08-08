@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Baixar auditoria
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -25,10 +27,13 @@ jobs:
       - name: Validar Carteira C2 antes da bateria
         run: |
           node scripts/validate-wallet-data.mjs
-          test "$(git diff --name-only origin/beta...HEAD 2>/dev/null | grep -E '^data/carteira-c2/|^data/migrations/|^VERSION$' | wc -l)" -eq 0 || {
+          git fetch origin beta
+          changed="$(git diff --name-only origin/beta...HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -E '^data/carteira-c2/|^data/migrations/|^VERSION$'; then
             echo 'A auditoria temporária não pode alterar C2, migrações ou VERSION.' >&2
             exit 1
-          }
+          fi
 
       - name: Instalar Playwright
         run: |
