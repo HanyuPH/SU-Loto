@@ -40,17 +40,18 @@ jobs:
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium webkit
 
-      - name: Isolar autenticação no ambiente de QA
+      - name: Isolar autenticação e aguardar identidade Beta no QA
         run: |
           python3 - <<'PY'
           from pathlib import Path
           path = Path('tests/live-post-sync-v5-visual.mjs')
           text = path.read_text()
-          old = '''  await page.evaluate(() => {
+
+          old_gate = '''  await page.evaluate(() => {
               const gate = document.getElementById("su-loto-cloud-gate");
               if (gate) gate.hidden = true;
             });'''
-          new = '''  await page.evaluate(() => {
+          new_gate = '''  await page.evaluate(() => {
               let style = document.getElementById("qa-hide-cloud-gate");
               if (!style) {
                 style = document.createElement("style");
@@ -61,9 +62,19 @@ jobs:
               const gate = document.getElementById("su-loto-cloud-gate");
               if (gate) gate.hidden = true;
             });'''
-          if old not in text:
+          if old_gate not in text:
               raise SystemExit('Trecho esperado de hideAuthGate não encontrado')
-          path.write_text(text.replace(old, new, 1))
+          text = text.replace(old_gate, new_gate, 1)
+
+          old_wait = '''  await page.waitForFunction(() => document.querySelectorAll(".game-card[data-id]").length === 300, null, { timeout: 30_000 });
+            await hideAuthGate(page);'''
+          new_wait = '''  await page.waitForFunction(() => document.querySelectorAll(".game-card[data-id]").length === 300, null, { timeout: 30_000 });
+            await page.waitForFunction(() => document.documentElement.dataset.suLotoBetaBuild === "v23" && document.getElementById("su-beta-banner")?.textContent.includes("Beta v23"), null, { timeout: 10_000 });
+            await hideAuthGate(page);'''
+          if old_wait not in text:
+              raise SystemExit('Trecho esperado de waitApp não encontrado')
+          text = text.replace(old_wait, new_wait, 1)
+          path.write_text(text)
           PY
 
       - name: Executar bateria pública e visual
